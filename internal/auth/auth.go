@@ -22,21 +22,17 @@ type Session struct {
 	CreatedAt  time.Time
 }
 
-// Store is an in-memory, TTL-aware session map.
+// Store is an in-memory session map.
 type Store struct {
 	mu       sync.RWMutex
 	sessions map[string]*Session // keyed by public-key hex
-	cleaner  *time.Ticker
 }
 
-// NewStore creates a session store and starts the background cleanup.
-func NewStore(ttl time.Duration) *Store {
-	s := &Store{
+// NewStore creates a session store.
+func NewStore() *Store {
+	return &Store{
 		sessions: make(map[string]*Session),
-		cleaner:  time.NewTicker(30 * time.Second),
 	}
-	go s.cleanupLoop(ttl)
-	return s
 }
 
 // Create generates a fresh ED25519 keypair and session entry.
@@ -94,17 +90,17 @@ func (sess *Session) SSHToken() string {
 	return fmt.Sprintf("%s:%s", sess.Subdomain, sess.Token)
 }
 
-func (s *Store) cleanupLoop(ttl time.Duration) {
-	for range s.cleaner.C {
-		cutoff := time.Now().Add(-ttl)
-		s.mu.Lock()
-		for k, v := range s.sessions {
-			if v.CreatedAt.Before(cutoff) {
-				delete(s.sessions, k)
-			}
+// Expired returns all sessions created before the given cutoff time.
+func (s *Store) Expired(cutoff time.Time) []*Session {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	var out []*Session
+	for _, sess := range s.sessions {
+		if sess.CreatedAt.Before(cutoff) {
+			out = append(out, sess)
 		}
-		s.mu.Unlock()
 	}
+	return out
 }
 
 // Nonce generates a random base64 string for challenge-response.

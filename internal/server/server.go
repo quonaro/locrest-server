@@ -44,7 +44,7 @@ func NewFrontend(cfg *config.ServerConfig, store *auth.Store, chisel *chiselwrap
 	}
 }
 
-// Run starts the HTTPS frontend and blocks.
+// Run starts the HTTP/HTTPS frontend and blocks.
 func (f *Frontend) Run(ctx context.Context) error {
 	mux := http.NewServeMux()
 	mux.Handle("/tunnel", f.chisel.Handler())
@@ -56,50 +56,47 @@ func (f *Frontend) Run(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("tls config: %w", err)
 	}
+	tlsEnabled := tlsConfig != nil
 
-	server := &http.Server{
+	primary := &http.Server{
 		Addr:      fmt.Sprintf(":%d", f.cfg.Port),
 		Handler:   mux,
 		TLSConfig: tlsConfig,
 	}
 
+	var insecureSrv *http.Server
+	if tlsEnabled && f.cfg.Insecure {
+		insecureSrv = &http.Server{Addr: ":80", Handler: mux}
+	}
+
 	go f.startCleaner(ctx)
 
-	slog.Info("frontend listening", "addr", server.Addr, "tls", tlsConfig != nil)
+	slog.Info("frontend listening", "addr", primary.Addr, "tls", tlsEnabled, "insecure", insecureSrv != nil)
 
-	var redirectSrv *http.Server
-	if tlsConfig != nil && f.cfg.Port != 80 {
-		redirectSrv = &http.Server{Addr: ":80", Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			target := "https://" + r.Host + r.URL.RequestURI()
-			if colonIdx := strings.LastIndex(r.Host, ":"); colonIdx != -1 {
-				target = "https://" + r.Host[:colonIdx] + r.URL.RequestURI()
-			}
-			http.Redirect(w, r, target, http.StatusMovedPermanently)
-		})}
+	errCh := make(chan error, 2)
+	go func() {
+		if tlsEnabled {
+			errCh <- primary.ListenAndServeTLS("", "")
+		} else {
+			errCh <- primary.ListenAndServe()
+		}
+	}()
+	if insecureSrv != nil {
 		go func() {
-			if err := redirectSrv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-				slog.Error("http redirect server failed", "error", err)
+			if err := insecureSrv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+				slog.Error("insecure server failed", "error", err)
 			}
 		}()
 	}
-
-	errCh := make(chan error, 1)
-	go func() {
-		if tlsConfig != nil {
-			errCh <- server.ListenAndServeTLS("", "")
-		} else {
-			errCh <- server.ListenAndServe()
-		}
-	}()
 
 	select {
 	case <-ctx.Done():
 		shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
-		if redirectSrv != nil {
-			redirectSrv.Shutdown(shutdownCtx)
+		if insecureSrv != nil {
+			insecureSrv.Shutdown(shutdownCtx)
 		}
-		if err := server.Shutdown(shutdownCtx); err != nil {
+		if err := primary.Shutdown(shutdownCtx); err != nil {
 			return err
 		}
 		return nil
@@ -133,10 +130,21 @@ func (f *Frontend) startCleaner(ctx context.Context) {
 			f.mu.Lock()
 			for subdomain, port := range f.routes {
 				if tunnel.GetProxyPipe(port) == nil {
+					f.chisel.DeleteUser(subdomain)
 					delete(f.routes, subdomain)
 				}
 			}
 			f.mu.Unlock()
+
+			if f.cfg.ScriptTTL > 0 {
+				cutoff := time.Now().Add(-f.cfg.ScriptTTL)
+				for _, sess := range f.store.Expired(cutoff) {
+					user, _, _ := strings.Cut(sess.SSHToken(), ":")
+					f.chisel.DeleteUser(user)
+					f.UnregisterRoute(sess.Subdomain)
+					f.store.Delete(sess.PublicKeyHex())
+				}
+			}
 		}
 	}
 }

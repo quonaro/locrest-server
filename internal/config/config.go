@@ -25,6 +25,7 @@ type ServerConfig struct {
 	Domain    string        `yaml:"domain"`
 	TLS       TLSConfig     `yaml:"tls"`
 	ScriptTTL time.Duration `yaml:"script_ttl"`
+	Insecure  bool          `yaml:"insecure"`
 }
 
 type yamlRoot struct {
@@ -65,6 +66,7 @@ func Load(path string) (*ServerConfig, error) {
 	flag.BoolVar(&cfg.TLS.AutoTLS, "auto-tls", cfg.TLS.AutoTLS, "enable autocert (Let's Encrypt)")
 	flag.StringVar(&cfg.TLS.Email, "tls-email", cfg.TLS.Email, "autocert contact email")
 	flag.DurationVar(&cfg.ScriptTTL, "script-ttl", cfg.ScriptTTL, "script/keypair TTL")
+	flag.BoolVar(&cfg.Insecure, "insecure", cfg.Insecure, "also listen on :80 without TLS when TLS is configured")
 	flag.Parse()
 
 	return cfg, nil

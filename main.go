@@ -20,7 +20,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	store := auth.NewStore(cfg.ScriptTTL)
+	store := auth.NewStore()
 	chisel, err := chiselwrapper.New()
 	if err != nil {
 		slog.Error("chisel init failed", "error", err)
