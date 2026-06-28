@@ -5,8 +5,6 @@ import (
 	"net/http"
 
 	chserver "locrest-server/internal/chiselvendor/server"
-
-	"github.com/jpillora/chisel/share/settings"
 )
 
 // Chisel wraps the embedded chisel server.
@@ -51,10 +49,4 @@ func (c *Chisel) DeleteUser(user string) {
 // Fingerprint returns the server's SSH host key fingerprint.
 func (c *Chisel) Fingerprint() string {
 	return c.server.GetFingerprint()
-}
-
-// UserExists is a helper to check whether a user has already been added.
-func (c *Chisel) UserExists(name string) bool {
-	_, found := settings.NewUsers().Get(name)
-	return found
 }

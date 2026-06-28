@@ -21,11 +21,10 @@ type TLSConfig struct {
 
 // ServerConfig is the runtime configuration.
 type ServerConfig struct {
-	Port        int           `yaml:"port"`
-	Domain      string        `yaml:"domain"`
-	TLS         TLSConfig     `yaml:"tls"`
-	ScriptTTL   time.Duration `yaml:"script_ttl"`
-	BaseSubPort int           `yaml:"base_sub_port"`
+	Port      int           `yaml:"port"`
+	Domain    string        `yaml:"domain"`
+	TLS       TLSConfig     `yaml:"tls"`
+	ScriptTTL time.Duration `yaml:"script_ttl"`
 }
 
 type yamlRoot struct {
@@ -35,10 +34,9 @@ type yamlRoot struct {
 // DefaultConfig returns sensible defaults.
 func DefaultConfig() *ServerConfig {
 	return &ServerConfig{
-		Port:        80,
-		Domain:      "localtest.me",
-		ScriptTTL:   5 * time.Minute,
-		BaseSubPort: 30000,
+		Port:      80,
+		Domain:    "localtest.me",
+		ScriptTTL: 5 * time.Minute,
 	}
 }
 
