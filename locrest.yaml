@@ -1,0 +1,18 @@
+server:
+  port: 80
+  domain: "localtest.me"
+  tls:
+    email: "admin@loc.rest"
+    # Wildcard: *.loc.rest через DNS-01 challenge.
+    # Один сертификат покрывает все субдомены; требует интеграции с DNS-провайдером.
+    wildcard:
+      enabled: true
+      provider: "cloudflare"
+      api_token: "${CF_API_TOKEN}"
+    # On-Demand: per-subdomain / per-custom-domain через HTTP-01 challenge.
+    # Выдаётся динамически при первом запросе; валидируется через DecisionFunc.
+    on_demand:
+      enabled: true
+      allowed_suffixes:
+      - "loc.rest"
+      - "localtest.me"

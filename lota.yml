@@ -1,0 +1,19 @@
+run:
+  desc: Build all and run locrest-server
+  color: magenta
+  script: |
+    CLIENT_DIR="internal/embedbin/bin"
+
+    echo "[1/3] Building client binaries..."
+    cd ../client
+    GOOS=linux   GOARCH=amd64 go build -ldflags="-s -w" -o ../server/${CLIENT_DIR}/locrest-client-linux-amd64 .
+    GOOS=linux   GOARCH=arm64 go build -ldflags="-s -w" -o ../server/${CLIENT_DIR}/locrest-client-linux-arm64 .
+    GOOS=darwin  GOARCH=amd64 go build -ldflags="-s -w" -o ../server/${CLIENT_DIR}/locrest-client-darwin-amd64 .
+    GOOS=darwin  GOARCH=arm64 go build -ldflags="-s -w" -o ../server/${CLIENT_DIR}/locrest-client-darwin-arm64 .
+    cd ../server
+
+    echo "[2/3] Building server..."
+    go build -o locrest-server .
+
+    echo "[3/3] Starting server..."
+    ./locrest-server
