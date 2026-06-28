@@ -46,3 +46,6 @@ locrest.local.yaml
 
 # Dependencies (if vendored)
 vendor/
+
+# Devin rules
+.devin/
