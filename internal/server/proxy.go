@@ -3,6 +3,7 @@ package server
 import (
 	"context"
 	_ "embed"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"html/template"
@@ -52,10 +53,37 @@ func stripErrorParam(rawQuery string) string {
 	return q.Encode()
 }
 
+func (f *Frontend) checkBasicAuth(w http.ResponseWriter, r *http.Request, subdomain string) bool {
+	sess, ok := f.store.GetBySubdomain(subdomain)
+	if !ok || sess.HTTPAuth == "" {
+		return true
+	}
+	authHeader := r.Header.Get("Authorization")
+	if authHeader == "" {
+		w.Header().Set("WWW-Authenticate", `Basic realm="locrest"`)
+		f.sendHTMLError(w, r, http.StatusUnauthorized, "Unauthorized", "Authentication required.")
+		return false
+	}
+	const prefix = "Basic "
+	if !strings.HasPrefix(authHeader, prefix) {
+		f.sendHTMLError(w, r, http.StatusUnauthorized, "Unauthorized", "Invalid authorization scheme.")
+		return false
+	}
+	decoded, err := base64.StdEncoding.DecodeString(authHeader[len(prefix):])
+	if err != nil || string(decoded) != sess.HTTPAuth {
+		f.sendHTMLError(w, r, http.StatusUnauthorized, "Unauthorized", "Invalid credentials.")
+		return false
+	}
+	return true
+}
+
 func (f *Frontend) proxyWebSocket(w http.ResponseWriter, r *http.Request) {
-	backendPort, _, ok := f.resolveRoute(r.Host)
+	backendPort, subdomain, ok := f.resolveRoute(r.Host)
 	if !ok {
 		f.sendHTMLError(w, r, http.StatusNotFound, "Tunnel Not Found", "No active tunnel for this host. The tunnel may have expired or the subdomain is incorrect.")
+		return
+	}
+	if !f.checkBasicAuth(w, r, subdomain) {
 		return
 	}
 
@@ -184,9 +212,12 @@ func (f *Frontend) proxyWebSocket(w http.ResponseWriter, r *http.Request) {
 }
 
 func (f *Frontend) proxyTunnel(w http.ResponseWriter, r *http.Request) {
-	backendPort, _, ok := f.resolveRoute(r.Host)
+	backendPort, subdomain, ok := f.resolveRoute(r.Host)
 	if !ok {
 		f.sendHTMLError(w, r, http.StatusNotFound, "Tunnel Not Found", "No active tunnel for this host. The tunnel may have expired or the subdomain is incorrect.")
+		return
+	}
+	if !f.checkBasicAuth(w, r, subdomain) {
 		return
 	}
 

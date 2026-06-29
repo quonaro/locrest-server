@@ -25,6 +25,7 @@ type Permissions struct {
 	RawTCP       bool          `yaml:"raw_tcp"`
 	SetTTL       bool          `yaml:"set_ttl"`
 	MaxTTL       time.Duration `yaml:"max_ttl"`
+	HTTPAuth     bool          `yaml:"http_auth"`
 }
 
 // PermissionsConfig holds permissions for public and authenticated users.
@@ -70,12 +71,14 @@ func DefaultConfig() *ServerConfig {
 				RawTCP:       false,
 				SetTTL:       false,
 				MaxTTL:       30 * time.Minute,
+				HTTPAuth:     true,
 			},
 			Auth: Permissions{
 				CreateTunnel: true,
 				RawTCP:       true,
 				SetTTL:       true,
 				MaxTTL:       7 * 24 * time.Hour,
+				HTTPAuth:     true,
 			},
 		},
 	}

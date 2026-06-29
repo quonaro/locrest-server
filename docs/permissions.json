@@ -27,6 +27,13 @@
       "default_public": "30m",
       "default_auth": "168h",
       "description": "Upper bound on tunnel lifetime for this role. Always enforced regardless of set_ttl."
+    },
+    "http_auth": {
+      "type": "boolean",
+      "applies_to": ["public", "auth"],
+      "default_public": true,
+      "default_auth": true,
+      "description": "Whether the role is allowed to request HTTP Basic Auth protection via ?http_auth= query parameter."
     }
   }
 }

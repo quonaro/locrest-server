@@ -41,7 +41,7 @@ func clientIP(r *http.Request, behindProxy bool) string {
 	return r.RemoteAddr
 }
 
-func (f *Frontend) handleScript(w http.ResponseWriter, r *http.Request, localPort, remotePort int, targetHost, mode string) {
+func (f *Frontend) handleScript(w http.ResponseWriter, r *http.Request, localPort, remotePort int, targetHost, mode, httpAuth string) {
 	role := "auth"
 	if !isAuthenticated(r, f.db) {
 		role = "public"
@@ -52,6 +52,18 @@ func (f *Frontend) handleScript(w http.ResponseWriter, r *http.Request, localPor
 	}
 	if f.store.Len() >= maxSessions {
 		http.Error(w, "Server busy", http.StatusServiceUnavailable)
+		return
+	}
+
+	var perms config.Permissions
+	if role == "public" {
+		perms = f.cfg.Permissions.Public
+	} else {
+		perms = f.cfg.Permissions.Auth
+	}
+
+	if httpAuth != "" && !perms.HTTPAuth {
+		http.Error(w, "Permission DENIED", http.StatusForbidden)
 		return
 	}
 
@@ -70,7 +82,7 @@ func (f *Frontend) handleScript(w http.ResponseWriter, r *http.Request, localPor
 		return
 	}
 
-	sess, err := f.store.Create(localPort, serverPort, targetHost, ttl, 16, mode, role)
+	sess, err := f.store.Create(localPort, serverPort, targetHost, ttl, 16, mode, role, httpAuth)
 	if err != nil {
 		http.Error(w, "Failed to create session", http.StatusInternalServerError)
 		return
@@ -240,6 +252,7 @@ func (f *Frontend) handleVerify(w http.ResponseWriter, r *http.Request) {
 		"remote":      fmt.Sprintf("R:%d:%s:%d", sess.ServerPort, sess.TargetHost, sess.LocalPort),
 		"fingerprint": f.chisel.Fingerprint(),
 		"mode":        sess.Mode,
+		"http_auth":   sess.HTTPAuth,
 	}
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(resp)

@@ -36,6 +36,7 @@ type Params struct {
 	OS          string
 	BinaryName  string
 	ExtraFlags  string
+	HTTPAuth    string
 }
 
 func wsURL(httpURL string) string {
@@ -101,6 +102,9 @@ chmod +x "$BIN"
 export LOCREST_SUBDOMAIN="{{.Subdomain}}"
 export LOCREST_SETUP_TOKEN="{{.SetupToken}}"
 
+{{if ne .HTTPAuth ""}}
+echo "Tunnel URL: {{.ServerURL}} (Basic Auth: {{.HTTPAuth}})"
+{{end}}
 # Supervisor loop with exponential backoff
 BACKOFF=1
 MAX_BACKOFF=30
@@ -148,6 +152,7 @@ func Generate(serverURL string, sess *auth.Session, ua string, flags map[string]
 		OS:          shellEscape(os),
 		BinaryName:  "locrest-client",
 		ExtraFlags:  extra,
+		HTTPAuth:    shellEscape(sess.HTTPAuth),
 	}
 	var buf strings.Builder
 	if err := scriptTemplate.Execute(&buf, p); err != nil {

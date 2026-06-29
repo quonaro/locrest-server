@@ -218,7 +218,7 @@ func (f *Frontend) UnregisterRoute(subdomain string) {
 	f.mu.Unlock()
 }
 
-// isPortInUse reports whether any active route already uses the given backend port.
+// isPortInUse reports whether any active route or TCP listener already uses the given port.
 func (f *Frontend) isPortInUse(port int) bool {
 	f.mu.RLock()
 	defer f.mu.RUnlock()
@@ -227,7 +227,8 @@ func (f *Frontend) isPortInUse(port int) bool {
 			return true
 		}
 	}
-	return false
+	_, ok := f.tcpListeners[port]
+	return ok
 }
 
 func (f *Frontend) startCleaner(ctx context.Context) {
@@ -386,16 +387,33 @@ func (f *Frontend) handler(w http.ResponseWriter, r *http.Request) {
 	path := r.URL.Path
 
 	targetHost := r.URL.Query().Get("host")
+	httpAuth := r.URL.Query().Get("http_auth")
+	if httpAuth == "true" {
+		user, err := auth.RandString(8)
+		if err != nil {
+			http.Error(w, "Failed to generate credentials", http.StatusInternalServerError)
+			return
+		}
+		pass, err := auth.RandString(16)
+		if err != nil {
+			http.Error(w, "Failed to generate credentials", http.StatusInternalServerError)
+			return
+		}
+		httpAuth = user + ":" + pass
+	} else if httpAuth != "" && !strings.Contains(httpAuth, ":") {
+		http.Error(w, "http_auth must be 'true' or 'user:pass'", http.StatusBadRequest)
+		return
+	}
 
 	if m := portPathRegex.FindStringSubmatch(path); m != nil && r.Method == http.MethodGet {
 		localPort, _ := strconv.Atoi(m[1])
-		f.handleScript(w, r, localPort, 0, targetHost, "http")
-		return
-	}
-	if m := portsPathRegex.FindStringSubmatch(path); m != nil && r.Method == http.MethodGet {
-		localPort, _ := strconv.Atoi(m[1])
-		remotePort, _ := strconv.Atoi(m[2])
-		f.handleScript(w, r, localPort, remotePort, targetHost, "tcp")
+		tcpPortStr := r.URL.Query().Get("tcp")
+		if tcpPortStr != "" {
+			remotePort, _ := strconv.Atoi(tcpPortStr)
+			f.handleScript(w, r, localPort, remotePort, targetHost, "tcp", httpAuth)
+		} else {
+			f.handleScript(w, r, localPort, 0, targetHost, "http", httpAuth)
+		}
 		return
 	}
 
