@@ -22,6 +22,21 @@ import (
 	"locrest-server/internal/embedbin"
 )
 
+func initLogLevel(level string) {
+	var lv slog.Level
+	switch strings.ToLower(level) {
+	case "debug":
+		lv = slog.LevelDebug
+	case "warn":
+		lv = slog.LevelWarn
+	case "error":
+		lv = slog.LevelError
+	default:
+		lv = slog.LevelInfo
+	}
+	slog.SetLogLoggerLevel(lv)
+}
+
 var (
 	portPathRegex  = regexp.MustCompile(`^/(\d+)$`)
 	portsPathRegex = regexp.MustCompile(`^/(\d+)/(\d+)$`)
@@ -107,8 +122,8 @@ func NewFrontend(cfg *config.ServerConfig, store *auth.Store, chisel *chiselwrap
 		chisel:                chisel,
 		db:                    database,
 		routes:                make(map[string]int),
-		rateLimiter:           newRateLimiter(10, time.Minute),
-		regenerateRateLimiter: newRateLimiter(3, time.Minute),
+		rateLimiter:           newRateLimiter(cfg.RateLimit.Requests, cfg.RateLimit.Window),
+		regenerateRateLimiter: newRateLimiter(cfg.RegenerateRateLimit.Requests, cfg.RegenerateRateLimit.Window),
 		tcpListeners:          make(map[int]net.Listener),
 	}
 }
@@ -118,19 +133,53 @@ func (f *Frontend) NextServerPort() int {
 	return int(f.nextPort.Add(1)%40000 + 20000)
 }
 
-func securityHeaders(next http.Handler, tls bool) http.Handler {
+func securityHeaders(next http.Handler, tls bool, custom map[string]string) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("X-Content-Type-Options", "nosniff")
 		w.Header().Set("X-Frame-Options", "DENY")
 		if tls {
 			w.Header().Set("Strict-Transport-Security", "max-age=31536000; includeSubDomains")
 		}
+		for k, v := range custom {
+			w.Header().Set(k, v)
+		}
 		next.ServeHTTP(w, r)
+	})
+}
+
+func ipFilterMiddleware(next http.Handler, allowed, blocked []string, behindProxy bool) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		ip := clientIP(r, behindProxy)
+		if len(allowed) > 0 && !ipAllowed(ip, allowed) {
+			http.Error(w, "Forbidden", http.StatusForbidden)
+			return
+		}
+		if len(blocked) > 0 && ipAllowed(ip, blocked) {
+			http.Error(w, "Forbidden", http.StatusForbidden)
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
+}
+
+func redirectToHTTPS(next http.Handler, httpsPort int) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		target := fmt.Sprintf("https://%s%s", r.Host, r.URL.RequestURI())
+		if httpsPort != 443 {
+			host := r.Host
+			if colonIdx := strings.LastIndex(host, ":"); colonIdx != -1 {
+				host = host[:colonIdx]
+			}
+			target = fmt.Sprintf("https://%s:%d%s", host, httpsPort, r.URL.RequestURI())
+		}
+		http.Redirect(w, r, target, http.StatusMovedPermanently)
 	})
 }
 
 // Run starts the HTTP/HTTPS frontend and blocks.
 func (f *Frontend) Run(ctx context.Context) error {
+	initLogLevel(f.cfg.LogLevel)
+
 	mux := http.NewServeMux()
 	mux.Handle("/tunnel", f.chisel.Handler())
 	mux.Handle("/tunnel/", f.chisel.Handler())
@@ -145,7 +194,8 @@ func (f *Frontend) Run(ctx context.Context) error {
 	}
 	tlsEnabled := tlsConfig != nil
 
-	handler := securityHeaders(mux, tlsEnabled)
+	handler := securityHeaders(mux, tlsEnabled, f.cfg.CustomHeaders)
+	handler = ipFilterMiddleware(handler, f.cfg.AllowedIPs, f.cfg.BlockedIPs, f.cfg.BehindProxy)
 
 	var primary *http.Server
 	var insecureSrv *http.Server
@@ -156,7 +206,11 @@ func (f *Frontend) Run(ctx context.Context) error {
 			TLSConfig: tlsConfig,
 		}
 		if f.cfg.Insecure {
-			insecureSrv = &http.Server{Addr: fmt.Sprintf(":%d", f.cfg.HTTPPort), Handler: handler}
+			if f.cfg.HTTPToHTTPSRedirect {
+				insecureSrv = &http.Server{Addr: fmt.Sprintf(":%d", f.cfg.HTTPPort), Handler: redirectToHTTPS(handler, f.cfg.HTTPSPort)}
+			} else {
+				insecureSrv = &http.Server{Addr: fmt.Sprintf(":%d", f.cfg.HTTPPort), Handler: handler}
+			}
 		}
 	} else {
 		primary = &http.Server{
@@ -362,6 +416,34 @@ func (f *Frontend) closeTCPListener(port int) {
 	}
 }
 
+func (f *Frontend) isReservedSubdomain(subdomain string) bool {
+	for _, r := range f.cfg.ReservedSubdomains {
+		if r == subdomain {
+			return true
+		}
+	}
+	return false
+}
+
+func (f *Frontend) isAllowedTunnelHost(host string) bool {
+	if len(f.cfg.BlockedTunnelHosts) > 0 {
+		for _, b := range f.cfg.BlockedTunnelHosts {
+			if b == host {
+				return false
+			}
+		}
+	}
+	if len(f.cfg.AllowedTunnelHosts) > 0 {
+		for _, a := range f.cfg.AllowedTunnelHosts {
+			if a == host {
+				return true
+			}
+		}
+		return false
+	}
+	return true
+}
+
 // resolveRoute looks up the backend port for a given host (or subdomain).
 func (f *Frontend) resolveRoute(host string) (port int, subdomain string, ok bool) {
 	if colonIdx := strings.LastIndex(host, ":"); colonIdx != -1 {
@@ -405,10 +487,25 @@ func (f *Frontend) handler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	role := "auth"
+	if !isAuthenticated(r, f.db) {
+		role = "public"
+	}
+	var perms config.Permissions
+	if role == "public" {
+		perms = f.cfg.Permissions.Public
+	} else {
+		perms = f.cfg.Permissions.Auth
+	}
+
 	if m := portPathRegex.FindStringSubmatch(path); m != nil && r.Method == http.MethodGet {
 		localPort, _ := strconv.Atoi(m[1])
 		tcpPortStr := r.URL.Query().Get("tcp")
 		if tcpPortStr != "" {
+			if !perms.SetTCPPort {
+				http.Error(w, "Permission DENIED", http.StatusForbidden)
+				return
+			}
 			remotePort, _ := strconv.Atoi(tcpPortStr)
 			f.handleScript(w, r, localPort, remotePort, targetHost, "tcp", httpAuth)
 		} else {
@@ -421,7 +518,7 @@ func (f *Frontend) handler(w http.ResponseWriter, r *http.Request) {
 		f.handleChallenge(w, r)
 		return
 	}
-	if path == "/status" {
+	if path == "/status" && f.cfg.StatusEndpoint {
 		f.handleStatus(w, r)
 		return
 	}

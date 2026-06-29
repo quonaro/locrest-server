@@ -18,8 +18,6 @@ import (
 	"locrest-server/internal/script"
 )
 
-const maxSessions = 10000
-
 func parseAllowedIPs(raw string) ([]string, error) {
 	if raw == "" {
 		return nil, nil
@@ -78,7 +76,7 @@ func (f *Frontend) handleScript(w http.ResponseWriter, r *http.Request, localPor
 		http.Error(w, "Rate limit exceeded", http.StatusTooManyRequests)
 		return
 	}
-	if f.store.Len() >= maxSessions {
+	if f.cfg.MaxSessions > 0 && f.store.Len() >= f.cfg.MaxSessions {
 		http.Error(w, "Server busy", http.StatusServiceUnavailable)
 		return
 	}
@@ -95,9 +93,22 @@ func (f *Frontend) handleScript(w http.ResponseWriter, r *http.Request, localPor
 		return
 	}
 
+	if targetHost != "" && !perms.SetHost {
+		http.Error(w, "Permission DENIED", http.StatusForbidden)
+		return
+	}
+	if targetHost != "" && !f.isAllowedTunnelHost(targetHost) {
+		http.Error(w, "target host is not allowed", http.StatusBadRequest)
+		return
+	}
+
 	requestedSubdomain := r.URL.Query().Get("subdomain")
 	if requestedSubdomain != "" && !perms.SetSubdomain {
 		http.Error(w, "Permission DENIED", http.StatusForbidden)
+		return
+	}
+	if requestedSubdomain != "" && f.isReservedSubdomain(requestedSubdomain) {
+		http.Error(w, "subdomain is reserved", http.StatusBadRequest)
 		return
 	}
 
@@ -131,7 +142,7 @@ func (f *Frontend) handleScript(w http.ResponseWriter, r *http.Request, localPor
 		return
 	}
 
-	sess, err := f.store.Create(localPort, serverPort, targetHost, ttl, 16, mode, role, httpAuth, requestedSubdomain, allowedIPs)
+	sess, err := f.store.Create(localPort, serverPort, targetHost, ttl, f.cfg.SubdomainLength, mode, role, httpAuth, requestedSubdomain, allowedIPs)
 	if err != nil {
 		msg := err.Error()
 		status := http.StatusInternalServerError

@@ -48,6 +48,27 @@
       "default_public": false,
       "default_auth": true,
       "description": "Whether the role can restrict tunnel access to specific IPs or CIDRs via ?allowed_ips= query parameter."
+    },
+    "set_host": {
+      "type": "boolean",
+      "applies_to": ["public", "auth"],
+      "default_public": false,
+      "default_auth": true,
+      "description": "Whether the role can override the tunnel target host via ?host= query parameter."
+    },
+    "set_tcp_port": {
+      "type": "boolean",
+      "applies_to": ["public", "auth"],
+      "default_public": false,
+      "default_auth": true,
+      "description": "Whether the role can request a raw TCP tunnel via ?tcp= query parameter."
+    },
+    "set_mode": {
+      "type": "boolean",
+      "applies_to": ["public", "auth"],
+      "default_public": false,
+      "default_auth": true,
+      "description": "Whether the role can explicitly set the tunnel mode via ?mode= query parameter."
     }
   }
 }
