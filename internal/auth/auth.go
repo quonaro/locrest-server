@@ -21,6 +21,7 @@ type Session struct {
 	Token      string
 	SetupToken string
 	CreatedAt  time.Time
+	LastUsedAt time.Time
 	Nonce      string
 	NonceAt    time.Time
 	Activated  bool
@@ -60,6 +61,13 @@ func (sess *Session) IsActivated() bool {
 	return sess.Activated
 }
 
+// Touch updates the last-used timestamp.
+func (sess *Session) Touch() {
+	sess.mu.Lock()
+	sess.LastUsedAt = time.Now()
+	sess.mu.Unlock()
+}
+
 // Store is an in-memory session map keyed by setup token.
 type Store struct {
 	mu       sync.RWMutex
@@ -94,6 +102,7 @@ func (s *Store) Create(subdomain string, localPort, serverPort int, targetHost s
 		Token:      token,
 		SetupToken: setup,
 		CreatedAt:  time.Now(),
+		LastUsedAt: time.Now(),
 	}
 	s.mu.Lock()
 	s.sessions[setup] = sess
@@ -115,6 +124,18 @@ func (s *Store) GetByPubkey(pubHex string) (*Session, bool) {
 	defer s.mu.RUnlock()
 	for _, sess := range s.sessions {
 		if hex.EncodeToString(sess.PubKey) == pubHex {
+			return sess, true
+		}
+	}
+	return nil, false
+}
+
+// GetBySubdomain finds a session by its subdomain.
+func (s *Store) GetBySubdomain(subdomain string) (*Session, bool) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	for _, sess := range s.sessions {
+		if sess.Subdomain == subdomain {
 			return sess, true
 		}
 	}
@@ -164,13 +185,19 @@ func (s *Store) Len() int {
 	return len(s.sessions)
 }
 
-// Expired returns all sessions created before the given cutoff time.
+// Expired returns all sessions whose last-used time is before the cutoff.
 func (s *Store) Expired(cutoff time.Time) []*Session {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	var out []*Session
 	for _, sess := range s.sessions {
-		if sess.CreatedAt.Before(cutoff) {
+		sess.mu.Lock()
+		last := sess.LastUsedAt
+		if last.IsZero() {
+			last = sess.CreatedAt
+		}
+		sess.mu.Unlock()
+		if last.Before(cutoff) {
 			out = append(out, sess)
 		}
 	}

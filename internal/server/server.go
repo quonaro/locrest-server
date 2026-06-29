@@ -161,6 +161,10 @@ func (f *Frontend) startCleaner(ctx context.Context) {
 			if f.cfg.ScriptTTL > 0 {
 				cutoff := time.Now().Add(-f.cfg.ScriptTTL)
 				for _, sess := range f.store.Expired(cutoff) {
+					if tunnel.GetProxyPipe(sess.ServerPort) != nil {
+						sess.Touch()
+						continue
+					}
 					f.chisel.DeleteUser(sess.Subdomain)
 					delete(f.routes, sess.Subdomain)
 					f.store.Delete(sess.SetupToken)
@@ -190,6 +194,10 @@ func (f *Frontend) handler(w http.ResponseWriter, r *http.Request) {
 
 	if path == "/challenge" {
 		f.handleChallenge(w, r)
+		return
+	}
+	if path == "/status" {
+		f.handleStatus(w, r)
 		return
 	}
 	if path == "/verify" {

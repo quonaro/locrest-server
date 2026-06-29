@@ -169,6 +169,25 @@ func (f *Frontend) handleVerify(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(resp)
 }
 
+func (f *Frontend) handleStatus(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	pubHex := r.URL.Query().Get("pubkey")
+	if pubHex == "" {
+		http.Error(w, "Missing pubkey", http.StatusBadRequest)
+		return
+	}
+	_, ok := f.store.GetByPubkey(pubHex)
+	if !ok {
+		http.Error(w, "Unknown pubkey", http.StatusUnauthorized)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Write([]byte(`{"alive":true}`))
+}
+
 func (f *Frontend) handleRegister(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)

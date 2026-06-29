@@ -36,6 +36,17 @@ func (f *Frontend) proxyWebSocket(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if sess, ok2 := f.store.GetBySubdomain(host); ok2 {
+		sess.Touch()
+	} else {
+		parts := strings.SplitN(host, ".", 2)
+		if len(parts) == 2 {
+			if sess, ok2 := f.store.GetBySubdomain(parts[0]); ok2 {
+				sess.Touch()
+			}
+		}
+	}
+
 	pipeCh := tunnel.GetProxyPipe(backendPort)
 	if pipeCh == nil {
 		http.Error(w, "No active tunnel for this host", http.StatusNotFound)
@@ -167,6 +178,17 @@ func (f *Frontend) proxyTunnel(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		http.Error(w, "No active tunnel for this host", http.StatusNotFound)
 		return
+	}
+
+	if sess, ok2 := f.store.GetBySubdomain(host); ok2 {
+		sess.Touch()
+	} else {
+		parts := strings.SplitN(host, ".", 2)
+		if len(parts) == 2 {
+			if sess, ok2 := f.store.GetBySubdomain(parts[0]); ok2 {
+				sess.Touch()
+			}
+		}
 	}
 
 	pipeCh := tunnel.GetProxyPipe(backendPort)

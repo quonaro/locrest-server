@@ -37,7 +37,7 @@ func DefaultConfig() *ServerConfig {
 	return &ServerConfig{
 		Port:      80,
 		Domain:    "localtest.me",
-		ScriptTTL: 5 * time.Minute,
+		ScriptTTL: 3 * time.Minute,
 	}
 }
 
