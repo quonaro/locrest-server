@@ -110,6 +110,14 @@ func TestSessionCRUD(t *testing.T) {
 	if ok {
 		t.Fatal("session should be deleted")
 	}
+	_, ok = db.GetSessionByPubkey("abcd1234abcd1234abcd1234abcd1234abcd1234abcd1234abcd1234abcd1234")
+	if ok {
+		t.Fatal("pubkey index should be cleaned up on delete")
+	}
+	_, ok = db.GetSessionBySubdomain(sess.Subdomain)
+	if ok {
+		t.Fatal("subdomain index should be cleaned up on delete")
+	}
 }
 
 func TestSessionAllowedIPs(t *testing.T) {

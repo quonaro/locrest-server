@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"crypto/ed25519"
 	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -54,6 +55,11 @@ func TestNextServerPort(t *testing.T) {
 	}
 	if p1 == p2 {
 		t.Fatal("consecutive ports should differ")
+	}
+	f.RegisterRoute("test", p1)
+	p3 := f.NextServerPort()
+	if p3 == p1 {
+		t.Fatal("NextServerPort should skip ports already in use by routes")
 	}
 }
 
@@ -216,8 +222,8 @@ func TestClientIP(t *testing.T) {
 		t.Fatalf("clientIP = %q, want 1.2.3.4", got)
 	}
 	req.Header.Set("X-Forwarded-For", "9.8.7.6, 5.4.3.2")
-	if got := clientIP(req, true); got != "5.4.3.2" {
-		t.Fatalf("clientIP behind proxy = %q, want 5.4.3.2", got)
+	if got := clientIP(req, true); got != "9.8.7.6" {
+		t.Fatalf("clientIP behind proxy = %q, want 9.8.7.6", got)
 	}
 	req.Header.Del("X-Forwarded-For")
 	req.Header.Set("X-Real-Ip", "10.0.0.1")
@@ -751,6 +757,89 @@ func TestHandlerStatusEndpointDisabled(t *testing.T) {
 	f.handler(rec, req)
 	if rec.Code != http.StatusNotFound {
 		t.Fatalf("status = %d, want 404", rec.Code)
+	}
+}
+
+func TestChallengeActivated(t *testing.T) {
+	f := newTestFrontend(t, nil)
+	sess, err := f.store.Create(3000, 0, "localhost", time.Hour, 8, "http", "public", "", "", nil)
+	if err != nil {
+		t.Fatalf("create session: %v", err)
+	}
+	pubKey, _, err := ed25519.GenerateKey(nil)
+	if err != nil {
+		t.Fatalf("generate key: %v", err)
+	}
+	pubHex := hex.EncodeToString(pubKey)
+	if !f.store.RegisterPubkey(sess.SetupToken, pubHex) {
+		t.Fatal("register pubkey failed")
+	}
+	if err := f.store.Activate(sess.SetupToken); err != nil {
+		t.Fatalf("activate: %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/challenge?pubkey="+pubHex, nil)
+	req.Host = "localtest.me"
+	rec := httptest.NewRecorder()
+	f.handleChallenge(rec, req)
+	if rec.Code != http.StatusConflict {
+		t.Fatalf("status = %d, want 409", rec.Code)
+	}
+}
+
+func TestBasicAuthCheck(t *testing.T) {
+	f := newTestFrontend(t, nil)
+	sess, err := f.store.Create(3000, 30001, "localhost", time.Hour, 8, "http", "public", "user:pass", "", nil)
+	if err != nil {
+		t.Fatalf("create session: %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	req.Host = sess.Subdomain + ".localtest.me"
+	req.Header.Set("Authorization", "Basic "+base64.StdEncoding.EncodeToString([]byte("user:pass")))
+	rec := httptest.NewRecorder()
+	if !f.checkBasicAuth(rec, req, sess.Subdomain) {
+		t.Fatal("valid credentials should pass")
+	}
+
+	rec2 := httptest.NewRecorder()
+	req2 := httptest.NewRequest(http.MethodGet, "/", nil)
+	req2.Host = sess.Subdomain + ".localtest.me"
+	req2.Header.Set("Authorization", "Basic "+base64.StdEncoding.EncodeToString([]byte("user:wrong")))
+	if f.checkBasicAuth(rec2, req2, sess.Subdomain) {
+		t.Fatal("invalid credentials should fail")
+	}
+	if rec2.Code != http.StatusUnauthorized {
+		t.Fatalf("status = %d, want 401", rec2.Code)
+	}
+}
+
+func TestReloadChiselUsers(t *testing.T) {
+	f := newTestFrontend(t, nil)
+	sess, err := f.store.Create(3000, 30001, "localhost", time.Hour, 8, "http", "public", "", "", nil)
+	if err != nil {
+		t.Fatalf("create session: %v", err)
+	}
+	pubKey, _, err := ed25519.GenerateKey(nil)
+	if err != nil {
+		t.Fatalf("generate key: %v", err)
+	}
+	pubHex := hex.EncodeToString(pubKey)
+	if !f.store.RegisterPubkey(sess.SetupToken, pubHex) {
+		t.Fatal("register pubkey failed")
+	}
+	if err := f.store.Activate(sess.SetupToken); err != nil {
+		t.Fatalf("activate: %v", err)
+	}
+
+	f.ReloadChiselUsers()
+
+	port, sub, ok := f.resolveRoute(sess.Subdomain + ".localtest.me")
+	if !ok {
+		t.Fatal("route should be registered after reload")
+	}
+	if port != sess.ServerPort || sub != sess.Subdomain {
+		t.Fatalf("got port=%d sub=%q, want port=%d sub=%q", port, sub, sess.ServerPort, sess.Subdomain)
 	}
 }
 

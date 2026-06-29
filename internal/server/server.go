@@ -3,7 +3,6 @@ package server
 import (
 	"context"
 	"fmt"
-	"io"
 	"log/slog"
 	"net"
 	"net/http"
@@ -42,61 +41,6 @@ var (
 	portsPathRegex = regexp.MustCompile(`^/(\d+)/(\d+)$`)
 )
 
-// rateLimiter is an in-memory sliding-window rate limiter per IP.
-type rateLimiter struct {
-	mu      sync.Mutex
-	windows map[string][]time.Time // IP -> request timestamps
-	limit   int
-	window  time.Duration
-}
-
-func newRateLimiter(limit int, window time.Duration) *rateLimiter {
-	return &rateLimiter{
-		windows: make(map[string][]time.Time),
-		limit:   limit,
-		window:  window,
-	}
-}
-
-func (rl *rateLimiter) allow(ip string) bool {
-	rl.mu.Lock()
-	defer rl.mu.Unlock()
-	now := time.Now()
-	cutoff := now.Add(-rl.window)
-	// drop old entries
-	recent := make([]time.Time, 0, len(rl.windows[ip]))
-	for _, t := range rl.windows[ip] {
-		if t.After(cutoff) {
-			recent = append(recent, t)
-		}
-	}
-	if len(recent) >= rl.limit {
-		rl.windows[ip] = recent
-		return false
-	}
-	rl.windows[ip] = append(recent, now)
-	return true
-}
-
-func (rl *rateLimiter) cleanup() {
-	rl.mu.Lock()
-	defer rl.mu.Unlock()
-	cutoff := time.Now().Add(-rl.window)
-	for ip, times := range rl.windows {
-		recent := make([]time.Time, 0, len(times))
-		for _, t := range times {
-			if t.After(cutoff) {
-				recent = append(recent, t)
-			}
-		}
-		if len(recent) == 0 {
-			delete(rl.windows, ip)
-		} else {
-			rl.windows[ip] = recent
-		}
-	}
-}
-
 // Frontend is the public HTTP/HTTPS server that dispenses scripts,
 // handles challenge-response, and reverse-proxies traffic into active tunnels.
 type Frontend struct {
@@ -126,54 +70,6 @@ func NewFrontend(cfg *config.ServerConfig, store *auth.Store, chisel *chiselwrap
 		regenerateRateLimiter: newRateLimiter(cfg.RegenerateRateLimit.Requests, cfg.RegenerateRateLimit.Window),
 		tcpListeners:          make(map[int]net.Listener),
 	}
-}
-
-// NextServerPort returns a unique internal port number for reverse-tunnel allocation.
-func (f *Frontend) NextServerPort() int {
-	return int(f.nextPort.Add(1)%40000 + 20000)
-}
-
-func securityHeaders(next http.Handler, tls bool, custom map[string]string) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("X-Content-Type-Options", "nosniff")
-		w.Header().Set("X-Frame-Options", "DENY")
-		if tls {
-			w.Header().Set("Strict-Transport-Security", "max-age=31536000; includeSubDomains")
-		}
-		for k, v := range custom {
-			w.Header().Set(k, v)
-		}
-		next.ServeHTTP(w, r)
-	})
-}
-
-func ipFilterMiddleware(next http.Handler, allowed, blocked []string, behindProxy bool) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		ip := clientIP(r, behindProxy)
-		if len(allowed) > 0 && !ipAllowed(ip, allowed) {
-			http.Error(w, "Forbidden", http.StatusForbidden)
-			return
-		}
-		if len(blocked) > 0 && ipAllowed(ip, blocked) {
-			http.Error(w, "Forbidden", http.StatusForbidden)
-			return
-		}
-		next.ServeHTTP(w, r)
-	})
-}
-
-func redirectToHTTPS(next http.Handler, httpsPort int) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		target := fmt.Sprintf("https://%s%s", r.Host, r.URL.RequestURI())
-		if httpsPort != 443 {
-			host := r.Host
-			if colonIdx := strings.LastIndex(host, ":"); colonIdx != -1 {
-				host = host[:colonIdx]
-			}
-			target = fmt.Sprintf("https://%s:%d%s", host, httpsPort, r.URL.RequestURI())
-		}
-		http.Redirect(w, r, target, http.StatusMovedPermanently)
-	})
 }
 
 // Run starts the HTTP/HTTPS frontend and blocks.
@@ -258,213 +154,6 @@ func (f *Frontend) Run(ctx context.Context) error {
 	}
 }
 
-// RegisterRoute maps a subdomain to a local backend port.
-func (f *Frontend) RegisterRoute(subdomain string, backendPort int) {
-	f.mu.Lock()
-	f.routes[subdomain] = backendPort
-	f.mu.Unlock()
-}
-
-// UnregisterRoute removes a subdomain mapping.
-func (f *Frontend) UnregisterRoute(subdomain string) {
-	f.mu.Lock()
-	delete(f.routes, subdomain)
-	f.mu.Unlock()
-}
-
-// isPortInUse reports whether any active route or TCP listener already uses the given port.
-func (f *Frontend) isPortInUse(port int) bool {
-	f.mu.RLock()
-	defer f.mu.RUnlock()
-	for _, p := range f.routes {
-		if p == port {
-			return true
-		}
-	}
-	_, ok := f.tcpListeners[port]
-	return ok
-}
-
-func (f *Frontend) startCleaner(ctx context.Context) {
-	ticker := time.NewTicker(30 * time.Second)
-	defer ticker.Stop()
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		case <-ticker.C:
-			f.cleanStaleRoutesAndSessions()
-			f.rateLimiter.cleanup()
-			f.regenerateRateLimiter.cleanup()
-		}
-	}
-}
-
-func (f *Frontend) startDisconnectWatcher(ctx context.Context) {
-	ticker := time.NewTicker(5 * time.Second)
-	defer ticker.Stop()
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		case <-ticker.C:
-			f.cleanStaleRoutesAndSessions()
-		}
-	}
-}
-
-func (f *Frontend) cleanStaleRoutesAndSessions() {
-	var staleRoutes []string
-	var expiredSessions []string
-	f.mu.Lock()
-	for subdomain, port := range f.routes {
-		if tunnel.GetProxyPipe(port) == nil {
-			staleRoutes = append(staleRoutes, subdomain)
-			delete(f.routes, subdomain)
-		}
-	}
-	if f.cfg.TTL > 0 {
-		now := time.Now()
-		for _, sess := range f.store.All() {
-			if now.After(sess.ExpiresAt) {
-				expiredSessions = append(expiredSessions, sess.SetupToken)
-				delete(f.routes, sess.Subdomain)
-			}
-		}
-	}
-	f.mu.Unlock()
-
-	for _, subdomain := range staleRoutes {
-		slog.Debug("cleaner: removing stale route", "subdomain", subdomain)
-		f.chisel.DeleteUser(subdomain)
-		if sess, ok := f.store.GetBySubdomain(subdomain); ok {
-			slog.Info("cleaner: deleting stale session", "subdomain", sess.Subdomain, "setup_token_prefix", sess.SetupToken[:8])
-			f.store.Delete(sess.SetupToken)
-		}
-	}
-	for _, setupToken := range expiredSessions {
-		sess, ok := f.store.Get(setupToken)
-		if ok {
-			slog.Info("cleaner: deleting expired session", "subdomain", sess.Subdomain, "setup_token_prefix", sess.SetupToken[:8], "ttl", f.cfg.TTL)
-			if sess.Mode == "tcp" {
-				f.closeTCPListener(sess.ServerPort)
-				f.chisel.DeleteUser(sess.Subdomain)
-			}
-		}
-		f.store.Delete(setupToken)
-	}
-}
-
-func (f *Frontend) startTCPListener(port int, setupToken string) {
-	addr := fmt.Sprintf(":%d", port)
-	ln, err := net.Listen("tcp", addr)
-	if err != nil {
-		slog.Error("tcp raw listen failed", "port", port, "error", err)
-		return
-	}
-	f.mu.Lock()
-	f.tcpListeners[port] = ln
-	f.mu.Unlock()
-
-	defer func() {
-		ln.Close()
-		f.mu.Lock()
-		delete(f.tcpListeners, port)
-		f.mu.Unlock()
-	}()
-
-	slog.Info("tcp raw listening", "port", port)
-	for {
-		conn, err := ln.Accept()
-		if err != nil {
-			slog.Debug("tcp raw accept error", "port", port, "error", err)
-			return
-		}
-		pipeCh := tunnel.GetProxyPipe(port)
-		if pipeCh == nil {
-			conn.Close()
-			continue
-		}
-		clientPipe, serverPipe := net.Pipe()
-		select {
-		case pipeCh <- serverPipe:
-		default:
-			clientPipe.Close()
-			conn.Close()
-			continue
-		}
-		go func(c net.Conn) {
-			defer clientPipe.Close()
-			defer c.Close()
-			var wg sync.WaitGroup
-			wg.Add(2)
-			go func() { io.Copy(clientPipe, c); wg.Done() }()
-			go func() { io.Copy(c, clientPipe); wg.Done() }()
-			wg.Wait()
-		}(conn)
-	}
-}
-
-func (f *Frontend) closeTCPListener(port int) {
-	f.mu.Lock()
-	ln := f.tcpListeners[port]
-	delete(f.tcpListeners, port)
-	f.mu.Unlock()
-	if ln != nil {
-		ln.Close()
-		slog.Debug("tcp raw listener closed", "port", port)
-	}
-}
-
-func (f *Frontend) isReservedSubdomain(subdomain string) bool {
-	for _, r := range f.cfg.ReservedSubdomains {
-		if r == subdomain {
-			return true
-		}
-	}
-	return false
-}
-
-func (f *Frontend) isAllowedTunnelHost(host string) bool {
-	if len(f.cfg.BlockedTunnelHosts) > 0 {
-		for _, b := range f.cfg.BlockedTunnelHosts {
-			if b == host {
-				return false
-			}
-		}
-	}
-	if len(f.cfg.AllowedTunnelHosts) > 0 {
-		for _, a := range f.cfg.AllowedTunnelHosts {
-			if a == host {
-				return true
-			}
-		}
-		return false
-	}
-	return true
-}
-
-// resolveRoute looks up the backend port for a given host (or subdomain).
-func (f *Frontend) resolveRoute(host string) (port int, subdomain string, ok bool) {
-	if colonIdx := strings.LastIndex(host, ":"); colonIdx != -1 {
-		host = host[:colonIdx]
-	}
-	f.mu.RLock()
-	defer f.mu.RUnlock()
-	port, ok = f.routes[host]
-	if ok {
-		return port, host, true
-	}
-	parts := strings.SplitN(host, ".", 2)
-	if len(parts) == 2 {
-		port, ok = f.routes[parts[0]]
-		if ok {
-			return port, parts[0], true
-		}
-	}
-	return 0, "", false
-}
-
 func (f *Frontend) handler(w http.ResponseWriter, r *http.Request) {
 	path := r.URL.Path
 
@@ -537,4 +226,33 @@ func (f *Frontend) handler(w http.ResponseWriter, r *http.Request) {
 
 func lowerUpgrade(v string) string {
 	return strings.ToLower(v)
+}
+
+// ReloadChiselUsers restores all activated sessions from persistent storage into the
+// in-memory chisel server and route table. Call this once after creating the frontend.
+func (f *Frontend) ReloadChiselUsers() {
+	for _, sess := range f.store.All() {
+		if !sess.IsActivated() {
+			continue
+		}
+		if err := f.chisel.AddUser(sess.Subdomain, sess.Token); err != nil {
+			slog.Warn("reload chisel user failed", "subdomain", sess.Subdomain, "error", err)
+			continue
+		}
+		if sess.Mode == "http" {
+			f.RegisterRoute(sess.Subdomain, sess.ServerPort)
+		} else if sess.Mode == "tcp" {
+			go func(port int, setupToken string) {
+				for i := 0; i < 50; i++ {
+					if tunnel.GetProxyPipe(port) != nil {
+						f.startTCPListener(port, setupToken)
+						return
+					}
+					time.Sleep(100 * time.Millisecond)
+				}
+				slog.Warn("reload tcp: chisel pipe never created", "port", port)
+			}(sess.ServerPort, sess.SetupToken)
+		}
+		slog.Debug("reloaded chisel user", "subdomain", sess.Subdomain, "mode", sess.Mode)
+	}
 }

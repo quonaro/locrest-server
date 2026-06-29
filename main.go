@@ -42,6 +42,7 @@ func main() {
 	database.StartCleaner(ctx, 30*time.Second)
 
 	frontend := server.NewFrontend(cfg, store, chisel, database)
+	frontend.ReloadChiselUsers()
 
 	sigCh := make(chan os.Signal, 1)
 	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
