@@ -232,6 +232,10 @@ func (f *Frontend) startCleaner(ctx context.Context) {
 			for _, subdomain := range staleRoutes {
 				slog.Debug("cleaner: removing stale route", "subdomain", subdomain)
 				f.chisel.DeleteUser(subdomain)
+				if sess, ok := f.store.GetBySubdomain(subdomain); ok {
+					slog.Info("cleaner: deleting stale session", "subdomain", sess.Subdomain, "setup_token_prefix", sess.SetupToken[:8])
+					f.store.Delete(sess.SetupToken)
+				}
 			}
 			for _, setupToken := range expiredSessions {
 				sess, ok := f.store.Get(setupToken)
