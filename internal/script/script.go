@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 	"text/template"
+	"time"
 
 	"locrest-server/internal/auth"
 )
@@ -31,6 +32,7 @@ type Params struct {
 	LocalPort   int
 	TargetHost  string
 	SetupToken  string
+	TokenTTL    time.Duration
 	OS          string
 	BinaryName  string
 	ExtraFlags  string
@@ -90,12 +92,13 @@ exec "$TMP" \
   -server "{{.WSServerURL}}/tunnel" \
   -port {{.LocalPort}} \
   -subdomain "{{.Subdomain}}" \
-  -setup-token "{{.SetupToken}}"{{if ne .TargetHost "localhost"}} \
+  -setup-token "{{.SetupToken}}" \
+  -token-ttl "{{.TokenTTL}}"{{if ne .TargetHost "localhost"}} \
   -host "{{.TargetHost}}"{{end}}{{.ExtraFlags}}
 `))
 
 // Generate returns a rendered shell script for the given session.
-func Generate(serverURL string, sess *auth.Session, ua string, flags map[string]string) (string, error) {
+func Generate(serverURL string, sess *auth.Session, ua string, flags map[string]string, tokenTTL time.Duration) (string, error) {
 	os := DetectOS(ua)
 	serverURL = strings.TrimRight(serverURL, "/")
 	extra := ""
@@ -109,6 +112,7 @@ func Generate(serverURL string, sess *auth.Session, ua string, flags map[string]
 		LocalPort:   sess.LocalPort,
 		TargetHost:  shellEscape(sess.TargetHost),
 		SetupToken:  sess.SetupToken,
+		TokenTTL:    tokenTTL,
 		OS:          shellEscape(os),
 		BinaryName:  "locrest-client",
 		ExtraFlags:  extra,
