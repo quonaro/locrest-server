@@ -1,5 +1,6 @@
 server:
-  port: 80
+  http_port: 80
+  https_port: 443
   domain: "localtest.me"
   ttl: 1h
   ttl_limit: 168h

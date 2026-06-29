@@ -142,15 +142,22 @@ func (f *Frontend) Run(ctx context.Context) error {
 
 	handler := securityHeaders(mux, tlsEnabled)
 
-	primary := &http.Server{
-		Addr:      fmt.Sprintf(":%d", f.cfg.Port),
-		Handler:   handler,
-		TLSConfig: tlsConfig,
-	}
-
+	var primary *http.Server
 	var insecureSrv *http.Server
-	if tlsEnabled && f.cfg.Insecure {
-		insecureSrv = &http.Server{Addr: ":80", Handler: handler}
+	if tlsEnabled {
+		primary = &http.Server{
+			Addr:      fmt.Sprintf(":%d", f.cfg.HTTPSPort),
+			Handler:   handler,
+			TLSConfig: tlsConfig,
+		}
+		if f.cfg.Insecure {
+			insecureSrv = &http.Server{Addr: fmt.Sprintf(":%d", f.cfg.HTTPPort), Handler: handler}
+		}
+	} else {
+		primary = &http.Server{
+			Addr:    fmt.Sprintf(":%d", f.cfg.HTTPPort),
+			Handler: handler,
+		}
 	}
 
 	go f.startCleaner(ctx)

@@ -35,7 +35,8 @@ type PermissionsConfig struct {
 
 // ServerConfig is the runtime configuration.
 type ServerConfig struct {
-	Port            int               `yaml:"port"`
+	HTTPPort        int               `yaml:"http_port"`
+	HTTPSPort       int               `yaml:"https_port"`
 	Domain          string            `yaml:"domain"`
 	TLS             TLSConfig         `yaml:"tls"`
 	TTL             time.Duration     `yaml:"ttl"`
@@ -56,7 +57,8 @@ type yamlRoot struct {
 // DefaultConfig returns sensible defaults.
 func DefaultConfig() *ServerConfig {
 	return &ServerConfig{
-		Port:      80,
+		HTTPPort:  80,
+		HTTPSPort: 443,
 		Domain:    "localtest.me",
 		TTL:       1 * time.Hour,
 		TTLLimit:  7 * 24 * time.Hour,
@@ -98,7 +100,8 @@ func Load(path string) (*ServerConfig, error) {
 
 	// CLI overrides
 	flag.StringVar(&cfg.Domain, "domain", cfg.Domain, "public domain")
-	flag.IntVar(&cfg.Port, "port", cfg.Port, "HTTP frontend port")
+	flag.IntVar(&cfg.HTTPPort, "http-port", cfg.HTTPPort, "HTTP frontend port")
+	flag.IntVar(&cfg.HTTPSPort, "https-port", cfg.HTTPSPort, "HTTPS frontend port")
 	flag.StringVar(&cfg.TLS.Cert, "tls-cert", cfg.TLS.Cert, "TLS certificate path")
 	flag.StringVar(&cfg.TLS.Key, "tls-key", cfg.TLS.Key, "TLS private key path")
 	flag.BoolVar(&cfg.TLS.AutoTLS, "auto-tls", cfg.TLS.AutoTLS, "enable autocert (Let's Encrypt)")

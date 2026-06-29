@@ -29,6 +29,8 @@ Thumbs.db
 *.swo
 *~
 
+*.db
+
 # Test & coverage
 *.test
 *.prof

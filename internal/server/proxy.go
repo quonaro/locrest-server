@@ -112,7 +112,7 @@ func (f *Frontend) proxyWebSocket(w http.ResponseWriter, r *http.Request) {
 			io.Copy(w, resp.Body)
 			resp.Body.Close()
 		} else {
-			f.sendHTMLError(w, r, http.StatusBadGateway, "Backend Unavailable", "The backend service is temporarily unavailable.")
+			f.sendHTMLError(w, r, http.StatusServiceUnavailable, "Service Offline", "Your local service is offline. Start it to enable this tunnel.")
 		}
 		return
 	}
@@ -222,7 +222,7 @@ func (f *Frontend) proxyTunnel(w http.ResponseWriter, r *http.Request) {
 				f.sendHTMLError(w, r, http.StatusServiceUnavailable, "Tunnel Overloaded", "The tunnel is currently overloaded. Please try again in a moment.")
 				return
 			}
-			f.sendHTMLError(w, r, http.StatusBadGateway, "Backend Unavailable", "The backend service is temporarily unavailable.")
+			f.sendHTMLError(w, r, http.StatusServiceUnavailable, "Service Offline", "Your local service is offline. Start it to enable this tunnel.")
 		},
 	}
 	proxy.ServeHTTP(w, r)

@@ -70,6 +70,16 @@ func (s *Store) All() []*Session {
 	return out
 }
 
+// UpdateNonce persists the given nonce and its timestamp for a session.
+func (s *Store) UpdateNonce(setupToken, nonce string, nonceAt time.Time) error {
+	return s.db.UpdateSessionNonce(setupToken, nonce, nonceAt)
+}
+
+// Activate marks a session as activated in persistent storage.
+func (s *Store) Activate(setupToken string) error {
+	return s.db.ActivateSession(setupToken)
+}
+
 // Nonce generates a random base64 string for challenge-response.
 func Nonce() (string, error) {
 	b := make([]byte, 32)

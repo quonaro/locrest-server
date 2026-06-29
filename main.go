@@ -51,7 +51,7 @@ func main() {
 		cancel()
 	}()
 
-	slog.Info("locrest-server starting", "frontend", cfg.Port)
+	slog.Info("locrest-server starting", "http_port", cfg.HTTPPort, "https_port", cfg.HTTPSPort)
 	if err := frontend.Run(ctx); err != nil {
 		slog.Error("frontend run failed", "error", err)
 		os.Exit(1)
