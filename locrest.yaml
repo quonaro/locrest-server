@@ -2,7 +2,7 @@ server:
   port: 80
   domain: "localtest.me"
   ttl: 1h
-  ttl_limit: 7d
+  ttl_limit: 168h
   dev: true
   binary_url: "https://github.com/locrest/locrest/releases/latest/download"
   tls:
