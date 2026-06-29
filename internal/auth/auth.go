@@ -5,206 +5,68 @@ import (
 	"crypto/rand"
 	"encoding/base64"
 	"encoding/hex"
-	"fmt"
-	"sync"
 	"time"
+
+	"locrest-server/internal/db"
 )
 
-// Session holds tunnel metadata and the registered client public key.
-type Session struct {
-	mu         sync.Mutex
-	PubKey     []byte
-	Subdomain  string
-	LocalPort  int
-	ServerPort int
-	TargetHost string
-	Token      string
-	SetupToken string
-	CreatedAt  time.Time
-	ExpiresAt  time.Time
-	Nonce      string
-	NonceAt    time.Time
-	Activated  bool
-}
+// Session is an alias for db.Session for backward compatibility.
+type Session = db.Session
 
-// SetNonce stores a fresh nonce and its timestamp under lock.
-func (sess *Session) SetNonce(nonce string) {
-	sess.mu.Lock()
-	sess.Nonce = nonce
-	sess.NonceAt = time.Now()
-	sess.mu.Unlock()
-}
-
-// ConsumeNonce validates the given nonce, ensures it has not expired,
-// and clears it so it cannot be reused. It returns true if the nonce is valid.
-func (sess *Session) ConsumeNonce(nonce string, ttl time.Duration) bool {
-	sess.mu.Lock()
-	defer sess.mu.Unlock()
-	if sess.Nonce == "" || sess.Nonce != nonce || time.Since(sess.NonceAt) > ttl {
-		return false
-	}
-	sess.Nonce = ""
-	return true
-}
-
-// Activate marks the session as activated (used). Safe for concurrent use.
-func (sess *Session) Activate() {
-	sess.mu.Lock()
-	sess.Activated = true
-	sess.mu.Unlock()
-}
-
-// IsActivated reports whether the session has already been activated.
-func (sess *Session) IsActivated() bool {
-	sess.mu.Lock()
-	defer sess.mu.Unlock()
-	return sess.Activated
-}
-
-// Store is an in-memory session map keyed by setup token, with secondary indexes
-// for fast pubkey and subdomain lookups.
+// Store is a thin adapter over db.DB that preserves the original API surface.
 type Store struct {
-	mu          sync.RWMutex
-	sessions    map[string]*Session // keyed by setup token
-	byPubkey    map[string]*Session // keyed by hex-encoded pubkey
-	bySubdomain map[string]*Session // keyed by subdomain
+	db *db.DB
 }
 
-// NewStore creates a session store.
-func NewStore() *Store {
-	return &Store{
-		sessions:    make(map[string]*Session),
-		byPubkey:    make(map[string]*Session),
-		bySubdomain: make(map[string]*Session),
-	}
+// NewStore creates a session store backed by BoltDB.
+func NewStore(d *db.DB) *Store {
+	return &Store{db: d}
 }
 
 // Create generates a new session with a unique subdomain, setup token and chisel token.
-// The subdomain is generated internally with an atomic collision check.
 func (s *Store) Create(localPort, serverPort int, targetHost string, ttl time.Duration, subdomainLen int) (*Session, error) {
-	if targetHost == "" {
-		targetHost = "localhost"
-	}
-	token, err := randHex(32)
-	if err != nil {
-		return nil, fmt.Errorf("generate token: %w", err)
-	}
-	setup, err := randHex(32)
-	if err != nil {
-		return nil, fmt.Errorf("generate setup token: %w", err)
-	}
-
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	var subdomain string
-	for attempts := 0; attempts < 100; attempts++ {
-		subdomain, err = RandString(subdomainLen)
-		if err != nil {
-			return nil, fmt.Errorf("generate subdomain: %w", err)
-		}
-		if _, exists := s.bySubdomain[subdomain]; !exists {
-			break
-		}
-	}
-	if _, exists := s.bySubdomain[subdomain]; exists {
-		return nil, fmt.Errorf("could not generate unique subdomain")
-	}
-
-	sess := &Session{
-		Subdomain:  subdomain,
-		LocalPort:  localPort,
-		ServerPort: serverPort,
-		TargetHost: targetHost,
-		Token:      token,
-		SetupToken: setup,
-		CreatedAt:  time.Now(),
-		ExpiresAt:  time.Now().Add(ttl),
-	}
-	s.sessions[setup] = sess
-	s.bySubdomain[subdomain] = sess
-	return sess, nil
+	return s.db.CreateSession(localPort, serverPort, targetHost, ttl, subdomainLen)
 }
 
 // Get retrieves a session by setup token.
 func (s *Store) Get(setupToken string) (*Session, bool) {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-	sess, ok := s.sessions[setupToken]
-	return sess, ok
+	return s.db.GetSession(setupToken)
 }
 
 // GetByPubkey finds a session by its registered public key (hex).
 func (s *Store) GetByPubkey(pubHex string) (*Session, bool) {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-	sess, ok := s.byPubkey[pubHex]
-	return sess, ok
+	return s.db.GetSessionByPubkey(pubHex)
 }
 
 // GetBySubdomain finds a session by its subdomain.
 func (s *Store) GetBySubdomain(subdomain string) (*Session, bool) {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-	sess, ok := s.bySubdomain[subdomain]
-	return sess, ok
+	return s.db.GetSessionBySubdomain(subdomain)
 }
 
 // RegisterPubkey links a public key to a pending session.
 // Returns false if the token is unknown, already activated, or already has a pubkey.
 func (s *Store) RegisterPubkey(setupToken, pubHex string) bool {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	sess, ok := s.sessions[setupToken]
-	if !ok || sess.Activated || len(sess.PubKey) > 0 {
-		return false
-	}
-	b, err := hex.DecodeString(pubHex)
-	if err != nil {
-		return false
-	}
-	sess.PubKey = b
-	s.byPubkey[pubHex] = sess
-	return true
+	return s.db.RegisterPubkey(setupToken, pubHex)
 }
 
 // Delete removes a session and its indexes.
 func (s *Store) Delete(setupToken string) {
-	s.mu.Lock()
-	sess, ok := s.sessions[setupToken]
-	if ok {
-		delete(s.sessions, setupToken)
-		delete(s.bySubdomain, sess.Subdomain)
-		if len(sess.PubKey) > 0 {
-			delete(s.byPubkey, hex.EncodeToString(sess.PubKey))
-		}
-	}
-	s.mu.Unlock()
+	s.db.DeleteSession(setupToken)
 }
 
 // HasSubdomain reports whether any existing session uses the given subdomain.
 func (s *Store) HasSubdomain(subdomain string) bool {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-	_, ok := s.bySubdomain[subdomain]
-	return ok
+	return s.db.HasSubdomain(subdomain)
 }
 
 // Len returns the number of active sessions.
 func (s *Store) Len() int {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-	return len(s.sessions)
+	return s.db.SessionCount()
 }
 
 // All returns a snapshot of all sessions.
 func (s *Store) All() []*Session {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-	out := make([]*Session, 0, len(s.sessions))
-	for _, sess := range s.sessions {
-		out = append(out, sess)
-	}
+	out, _ := s.db.AllSessions()
 	return out
 }
 

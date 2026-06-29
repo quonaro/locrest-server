@@ -19,18 +19,34 @@ type TLSConfig struct {
 	Email   string   `yaml:"email"`
 }
 
+// Permissions defines capabilities for a role (public or auth).
+type Permissions struct {
+	CreateTunnel bool          `yaml:"create_tunnel"`
+	RawTCP       bool          `yaml:"raw_tcp"`
+	SetTTL       bool          `yaml:"set_ttl"`
+	MaxTTL       time.Duration `yaml:"max_ttl"`
+}
+
+// PermissionsConfig holds permissions for public and authenticated users.
+type PermissionsConfig struct {
+	Public Permissions `yaml:"public"`
+	Auth   Permissions `yaml:"auth"`
+}
+
 // ServerConfig is the runtime configuration.
 type ServerConfig struct {
-	Port            int           `yaml:"port"`
-	Domain          string        `yaml:"domain"`
-	TLS             TLSConfig     `yaml:"tls"`
-	TTL             time.Duration `yaml:"ttl"`
-	TTLLimit        time.Duration `yaml:"ttl_limit"`
-	Insecure        bool          `yaml:"insecure"`
-	Dev             bool          `yaml:"dev"`
-	BinaryURL       string        `yaml:"binary_url"`
-	StripErrorParam bool          `yaml:"strip_error_param"`
-	BehindProxy     bool          `yaml:"behind_proxy"`
+	Port            int               `yaml:"port"`
+	Domain          string            `yaml:"domain"`
+	TLS             TLSConfig         `yaml:"tls"`
+	TTL             time.Duration     `yaml:"ttl"`
+	TTLLimit        time.Duration     `yaml:"ttl_limit"`
+	Insecure        bool              `yaml:"insecure"`
+	Dev             bool              `yaml:"dev"`
+	BinaryURL       string            `yaml:"binary_url"`
+	StripErrorParam bool              `yaml:"strip_error_param"`
+	BehindProxy     bool              `yaml:"behind_proxy"`
+	DBPath          string            `yaml:"db_path"`
+	Permissions     PermissionsConfig `yaml:"permissions"`
 }
 
 type yamlRoot struct {
@@ -45,6 +61,21 @@ func DefaultConfig() *ServerConfig {
 		TTL:       1 * time.Hour,
 		TTLLimit:  7 * 24 * time.Hour,
 		BinaryURL: "https://github.com/locrest/locrest/releases/latest/download",
+		DBPath:    "locrest.db",
+		Permissions: PermissionsConfig{
+			Public: Permissions{
+				CreateTunnel: true,
+				RawTCP:       false,
+				SetTTL:       false,
+				MaxTTL:       30 * time.Minute,
+			},
+			Auth: Permissions{
+				CreateTunnel: true,
+				RawTCP:       true,
+				SetTTL:       true,
+				MaxTTL:       7 * 24 * time.Hour,
+			},
+		},
 	}
 }
 
@@ -79,6 +110,7 @@ func Load(path string) (*ServerConfig, error) {
 	flag.StringVar(&cfg.BinaryURL, "binary-url", cfg.BinaryURL, "base URL for client binaries (used when dev=false)")
 	flag.BoolVar(&cfg.StripErrorParam, "strip-error-param", cfg.StripErrorParam, "strip the 'error' query parameter before forwarding to backend")
 	flag.BoolVar(&cfg.BehindProxy, "behind-proxy", cfg.BehindProxy, "trust X-Forwarded-For and X-Real-Ip headers for client IP")
+	flag.StringVar(&cfg.DBPath, "db-path", cfg.DBPath, "path to BoltDB file")
 	flag.Parse()
 
 	return cfg, nil

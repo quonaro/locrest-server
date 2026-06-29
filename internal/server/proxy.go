@@ -53,20 +53,7 @@ func stripErrorParam(rawQuery string) string {
 }
 
 func (f *Frontend) proxyWebSocket(w http.ResponseWriter, r *http.Request) {
-	host := r.Host
-	if colonIdx := strings.LastIndex(host, ":"); colonIdx != -1 {
-		host = host[:colonIdx]
-	}
-
-	f.mu.RLock()
-	backendPort, ok := f.routes[host]
-	if !ok {
-		parts := strings.SplitN(host, ".", 2)
-		if len(parts) == 2 {
-			backendPort, ok = f.routes[parts[0]]
-		}
-	}
-	f.mu.RUnlock()
+	backendPort, _, ok := f.resolveRoute(r.Host)
 	if !ok {
 		f.sendHTMLError(w, r, http.StatusNotFound, "Tunnel Not Found", "No active tunnel for this host. The tunnel may have expired or the subdomain is incorrect.")
 		return
@@ -197,20 +184,7 @@ func (f *Frontend) proxyWebSocket(w http.ResponseWriter, r *http.Request) {
 }
 
 func (f *Frontend) proxyTunnel(w http.ResponseWriter, r *http.Request) {
-	host := r.Host
-	if colonIdx := strings.LastIndex(host, ":"); colonIdx != -1 {
-		host = host[:colonIdx]
-	}
-
-	f.mu.RLock()
-	backendPort, ok := f.routes[host]
-	if !ok {
-		parts := strings.SplitN(host, ".", 2)
-		if len(parts) == 2 {
-			backendPort, ok = f.routes[parts[0]]
-		}
-	}
-	f.mu.RUnlock()
+	backendPort, _, ok := f.resolveRoute(r.Host)
 	if !ok {
 		f.sendHTMLError(w, r, http.StatusNotFound, "Tunnel Not Found", "No active tunnel for this host. The tunnel may have expired or the subdomain is incorrect.")
 		return

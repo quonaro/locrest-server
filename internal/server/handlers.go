@@ -12,6 +12,8 @@ import (
 	"time"
 
 	"locrest-server/internal/auth"
+	"locrest-server/internal/config"
+	"locrest-server/internal/db"
 	"locrest-server/internal/script"
 )
 
@@ -23,7 +25,7 @@ func clientIP(r *http.Request, behindProxy bool) string {
 		if ip != "" {
 			parts := strings.Split(ip, ",")
 			if len(parts) > 0 {
-				return strings.TrimSpace(parts[0])
+				return strings.TrimSpace(parts[len(parts)-1])
 			}
 		}
 		ip = r.Header.Get("X-Real-Ip")
@@ -39,6 +41,17 @@ func clientIP(r *http.Request, behindProxy bool) string {
 }
 
 func (f *Frontend) handleScript(w http.ResponseWriter, r *http.Request, localPort, remotePort int, targetHost string) {
+	rolePublic := !isAuthenticated(r, f.db)
+	var perms config.Permissions
+	if rolePublic {
+		perms = f.cfg.Permissions.Public
+	} else {
+		perms = f.cfg.Permissions.Auth
+	}
+	if !perms.CreateTunnel {
+		http.Error(w, "Forbidden", http.StatusForbidden)
+		return
+	}
 	if !f.rateLimiter.allow(clientIP(r, f.cfg.BehindProxy)) {
 		http.Error(w, "Rate limit exceeded", http.StatusTooManyRequests)
 		return
@@ -48,22 +61,10 @@ func (f *Frontend) handleScript(w http.ResponseWriter, r *http.Request, localPor
 		return
 	}
 
-	ttl := f.cfg.TTL
-	if raw := r.URL.Query().Get("ttl"); raw != "" {
-		reqTTL, err := time.ParseDuration(raw)
-		if err != nil {
-			http.Error(w, "Invalid ttl: expected duration like 1h, 30m, 90s", http.StatusBadRequest)
-			return
-		}
-		if reqTTL > f.cfg.TTLLimit {
-			http.Error(w, fmt.Sprintf("Requested ttl %s exceeds maximum %s", reqTTL, f.cfg.TTLLimit), http.StatusBadRequest)
-			return
-		}
-		if reqTTL <= 0 {
-			http.Error(w, "ttl must be positive", http.StatusBadRequest)
-			return
-		}
-		ttl = reqTTL
+	ttl, err := effectiveTTL(r, f.cfg, rolePublic)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
 	}
 
 	serverPort := f.NextServerPort()
@@ -185,14 +186,13 @@ func (f *Frontend) handleVerify(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	sess.Activate()
-
 	if err := f.chisel.AddUser(sess.Subdomain, sess.Token); err != nil {
 		http.Error(w, "Failed to register user", http.StatusInternalServerError)
 		return
 	}
 
 	f.RegisterRoute(sess.Subdomain, sess.ServerPort)
+	sess.Activate()
 
 	resp := map[string]interface{}{
 		"token":       sess.Token,
@@ -251,4 +251,48 @@ func (f *Frontend) handleRegister(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	w.Write([]byte(`{"ok":true}`))
+}
+
+func (f *Frontend) handleRegenerate(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	if !f.regenerateRateLimiter.allow(clientIP(r, f.cfg.BehindProxy)) {
+		http.Error(w, "Rate limit exceeded", http.StatusTooManyRequests)
+		return
+	}
+
+	r.Body = http.MaxBytesReader(w, r.Body, 64*1024)
+	var req struct {
+		SeedPhrase string `json:"seed_phrase"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Bad request", http.StatusBadRequest)
+		return
+	}
+	if req.SeedPhrase == "" {
+		http.Error(w, "Missing seed_phrase", http.StatusBadRequest)
+		return
+	}
+
+	hash := db.HashSeedPhrase(req.SeedPhrase)
+	user, err := f.db.GetUserBySeedHash(hash)
+	if err != nil {
+		http.Error(w, "Invalid seed phrase", http.StatusUnauthorized)
+		return
+	}
+
+	newToken, err := auth.RandString(32)
+	if err != nil {
+		http.Error(w, "Token generation failed", http.StatusInternalServerError)
+		return
+	}
+	if err := f.db.UpdateUserToken(user.Username, newToken); err != nil {
+		http.Error(w, "Token update failed", http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]string{"token": newToken})
 }

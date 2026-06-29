@@ -1,0 +1,32 @@
+{
+  "permissions": {
+    "create_tunnel": {
+      "type": "boolean",
+      "applies_to": ["public", "auth"],
+      "default_public": true,
+      "default_auth": true,
+      "description": "Whether the role is allowed to open a new tunnel (request an install script)."
+    },
+    "raw_tcp": {
+      "type": "boolean",
+      "applies_to": ["public", "auth"],
+      "default_public": false,
+      "default_auth": true,
+      "description": "Whether the role is allowed to open raw TCP tunnels via GET /:port/:port?raw=tcp."
+    },
+    "set_ttl": {
+      "type": "boolean",
+      "applies_to": ["public", "auth"],
+      "default_public": false,
+      "default_auth": true,
+      "description": "Whether the role can choose their own tunnel TTL via query param. If false the server hard-overrides to max_ttl."
+    },
+    "max_ttl": {
+      "type": "duration",
+      "applies_to": ["public", "auth"],
+      "default_public": "30m",
+      "default_auth": "168h",
+      "description": "Upper bound on tunnel lifetime for this role. Always enforced regardless of set_ttl."
+    }
+  }
+}

@@ -16,6 +16,7 @@ import (
 	tunnel "locrest-server/internal/chiselvendor/tunnel"
 	"locrest-server/internal/chiselwrapper"
 	"locrest-server/internal/config"
+	"locrest-server/internal/db"
 	"locrest-server/internal/embedbin"
 )
 
@@ -85,21 +86,25 @@ type Frontend struct {
 	cfg    *config.ServerConfig
 	store  *auth.Store
 	chisel *chiselwrapper.Chisel
+	db     *db.DB
 	mu     sync.RWMutex
 	// subdomain -> backend port
-	routes      map[string]int
-	nextPort    atomic.Uint32
-	rateLimiter *rateLimiter
+	routes                map[string]int
+	nextPort              atomic.Uint32
+	rateLimiter           *rateLimiter
+	regenerateRateLimiter *rateLimiter
 }
 
 // NewFrontend creates the HTTP frontend.
-func NewFrontend(cfg *config.ServerConfig, store *auth.Store, chisel *chiselwrapper.Chisel) *Frontend {
+func NewFrontend(cfg *config.ServerConfig, store *auth.Store, chisel *chiselwrapper.Chisel, database *db.DB) *Frontend {
 	return &Frontend{
-		cfg:         cfg,
-		store:       store,
-		chisel:      chisel,
-		routes:      make(map[string]int),
-		rateLimiter: newRateLimiter(10, time.Minute),
+		cfg:                   cfg,
+		store:                 store,
+		chisel:                chisel,
+		db:                    database,
+		routes:                make(map[string]int),
+		rateLimiter:           newRateLimiter(10, time.Minute),
+		regenerateRateLimiter: newRateLimiter(3, time.Minute),
 	}
 }
 
@@ -126,6 +131,7 @@ func (f *Frontend) Run(ctx context.Context) error {
 	mux.Handle("/tunnel/", f.chisel.Handler())
 	mux.HandleFunc("/bin/", embedbin.NewHandler(f.cfg.Dev, f.cfg.BinaryURL))
 	mux.HandleFunc("/register", f.handleRegister)
+	mux.HandleFunc("/regenerate", f.handleRegenerate)
 	mux.HandleFunc("/", f.handler)
 
 	tlsConfig, err := f.buildTLSConfig()
@@ -148,6 +154,7 @@ func (f *Frontend) Run(ctx context.Context) error {
 	}
 
 	go f.startCleaner(ctx)
+	go f.startDisconnectWatcher(ctx)
 
 	slog.Info("frontend listening", "addr", primary.Addr, "tls", tlsEnabled, "insecure", insecureSrv != nil)
 
@@ -207,47 +214,83 @@ func (f *Frontend) startCleaner(ctx context.Context) {
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			// Collect stale routes and expired sessions while holding the lock.
-			var staleRoutes []string
-			var expiredSessions []string
-			f.mu.Lock()
-			for subdomain, port := range f.routes {
-				if tunnel.GetProxyPipe(port) == nil {
-					staleRoutes = append(staleRoutes, subdomain)
-					delete(f.routes, subdomain)
-				}
-			}
-			if f.cfg.TTL > 0 {
-				now := time.Now()
-				for _, sess := range f.store.All() {
-					if now.After(sess.ExpiresAt) {
-						expiredSessions = append(expiredSessions, sess.SetupToken)
-						delete(f.routes, sess.Subdomain)
-					}
-				}
-			}
-			f.mu.Unlock()
-
-			// Perform I/O outside the lock.
-			for _, subdomain := range staleRoutes {
-				slog.Debug("cleaner: removing stale route", "subdomain", subdomain)
-				f.chisel.DeleteUser(subdomain)
-				if sess, ok := f.store.GetBySubdomain(subdomain); ok {
-					slog.Info("cleaner: deleting stale session", "subdomain", sess.Subdomain, "setup_token_prefix", sess.SetupToken[:8])
-					f.store.Delete(sess.SetupToken)
-				}
-			}
-			for _, setupToken := range expiredSessions {
-				sess, ok := f.store.Get(setupToken)
-				if ok {
-					slog.Info("cleaner: deleting expired session", "subdomain", sess.Subdomain, "setup_token_prefix", sess.SetupToken[:8], "ttl", f.cfg.TTL)
-				}
-				f.store.Delete(setupToken)
-			}
-
+			f.cleanStaleRoutesAndSessions()
 			f.rateLimiter.cleanup()
+			f.regenerateRateLimiter.cleanup()
 		}
 	}
+}
+
+func (f *Frontend) startDisconnectWatcher(ctx context.Context) {
+	ticker := time.NewTicker(5 * time.Second)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			f.cleanStaleRoutesAndSessions()
+		}
+	}
+}
+
+func (f *Frontend) cleanStaleRoutesAndSessions() {
+	var staleRoutes []string
+	var expiredSessions []string
+	f.mu.Lock()
+	for subdomain, port := range f.routes {
+		if tunnel.GetProxyPipe(port) == nil {
+			staleRoutes = append(staleRoutes, subdomain)
+			delete(f.routes, subdomain)
+		}
+	}
+	if f.cfg.TTL > 0 {
+		now := time.Now()
+		for _, sess := range f.store.All() {
+			if now.After(sess.ExpiresAt) {
+				expiredSessions = append(expiredSessions, sess.SetupToken)
+				delete(f.routes, sess.Subdomain)
+			}
+		}
+	}
+	f.mu.Unlock()
+
+	for _, subdomain := range staleRoutes {
+		slog.Debug("cleaner: removing stale route", "subdomain", subdomain)
+		f.chisel.DeleteUser(subdomain)
+		if sess, ok := f.store.GetBySubdomain(subdomain); ok {
+			slog.Info("cleaner: deleting stale session", "subdomain", sess.Subdomain, "setup_token_prefix", sess.SetupToken[:8])
+			f.store.Delete(sess.SetupToken)
+		}
+	}
+	for _, setupToken := range expiredSessions {
+		sess, ok := f.store.Get(setupToken)
+		if ok {
+			slog.Info("cleaner: deleting expired session", "subdomain", sess.Subdomain, "setup_token_prefix", sess.SetupToken[:8], "ttl", f.cfg.TTL)
+		}
+		f.store.Delete(setupToken)
+	}
+}
+
+// resolveRoute looks up the backend port for a given host (or subdomain).
+func (f *Frontend) resolveRoute(host string) (port int, subdomain string, ok bool) {
+	if colonIdx := strings.LastIndex(host, ":"); colonIdx != -1 {
+		host = host[:colonIdx]
+	}
+	f.mu.RLock()
+	defer f.mu.RUnlock()
+	port, ok = f.routes[host]
+	if ok {
+		return port, host, true
+	}
+	parts := strings.SplitN(host, ".", 2)
+	if len(parts) == 2 {
+		port, ok = f.routes[parts[0]]
+		if ok {
+			return port, parts[0], true
+		}
+	}
+	return 0, "", false
 }
 
 func (f *Frontend) handler(w http.ResponseWriter, r *http.Request) {
@@ -263,7 +306,11 @@ func (f *Frontend) handler(w http.ResponseWriter, r *http.Request) {
 	if m := portsPathRegex.FindStringSubmatch(path); m != nil && r.Method == http.MethodGet {
 		localPort, _ := strconv.Atoi(m[1])
 		remotePort, _ := strconv.Atoi(m[2])
-		f.handleScript(w, r, localPort, remotePort, targetHost)
+		if r.URL.Query().Get("raw") == "tcp" {
+			f.handleRawTCP(w, r, localPort, remotePort, targetHost)
+		} else {
+			f.handleScript(w, r, localPort, remotePort, targetHost)
+		}
 		return
 	}
 

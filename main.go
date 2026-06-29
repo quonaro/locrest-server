@@ -6,10 +6,12 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
 	"locrest-server/internal/auth"
 	"locrest-server/internal/chiselwrapper"
 	"locrest-server/internal/config"
+	"locrest-server/internal/db"
 	"locrest-server/internal/server"
 )
 
@@ -20,7 +22,14 @@ func main() {
 		os.Exit(1)
 	}
 
-	store := auth.NewStore()
+	database, err := db.Open(cfg.DBPath)
+	if err != nil {
+		slog.Error("db open failed", "error", err)
+		os.Exit(1)
+	}
+	defer database.Close()
+
+	store := auth.NewStore(database)
 	chisel, err := chiselwrapper.New()
 	if err != nil {
 		slog.Error("chisel init failed", "error", err)
@@ -30,7 +39,9 @@ func main() {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	frontend := server.NewFrontend(cfg, store, chisel)
+	database.StartCleaner(ctx, 30*time.Second)
+
+	frontend := server.NewFrontend(cfg, store, chisel, database)
 
 	sigCh := make(chan os.Signal, 1)
 	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
