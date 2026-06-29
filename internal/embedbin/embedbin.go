@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"io"
+	"io/fs"
 	"net/http"
 	"path"
 	"strings"
@@ -14,10 +15,18 @@ import (
 //go:embed bin/*
 var binFS embed.FS
 
+// staticFS is the filesystem used by the handlers. Tests may replace it with a directory FS.
+var staticFS fs.FS = binFS
+
 var checksums = make(map[string]string)
 
 func init() {
-	entries, err := binFS.ReadDir("bin")
+	initChecksums()
+}
+
+func initChecksums() {
+	checksums = make(map[string]string)
+	entries, err := fs.ReadDir(staticFS, "bin")
 	if err != nil {
 		return
 	}
@@ -25,7 +34,7 @@ func init() {
 		if entry.IsDir() || !strings.HasPrefix(entry.Name(), "locrest-client-") {
 			continue
 		}
-		f, err := binFS.Open("bin/" + entry.Name())
+		f, err := staticFS.Open("bin/" + entry.Name())
 		if err != nil {
 			continue
 		}
@@ -47,7 +56,7 @@ func ServeBinary(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	f, err := binFS.Open("bin/" + fileName)
+	f, err := staticFS.Open("bin/" + fileName)
 	if err != nil {
 		http.NotFound(w, r)
 		return
