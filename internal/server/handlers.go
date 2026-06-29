@@ -37,7 +37,7 @@ func (f *Frontend) handleScript(w http.ResponseWriter, r *http.Request, localPor
 		}
 	}
 
-	sess, err := f.store.Create(subdomain, localPort, serverPort, targetHost)
+	sess, err := f.store.Create(subdomain, localPort, serverPort, targetHost, f.cfg.MaxTTL)
 	if err != nil {
 		http.Error(w, "Failed to create session", http.StatusInternalServerError)
 		return
@@ -125,6 +125,10 @@ func (f *Frontend) handleVerify(w http.ResponseWriter, r *http.Request) {
 	sess, ok := f.store.GetByPubkey(req.PubKey)
 	if !ok {
 		http.Error(w, "Unknown pubkey", http.StatusUnauthorized)
+		return
+	}
+	if sess.IsActivated() {
+		http.Error(w, "Session already activated", http.StatusConflict)
 		return
 	}
 

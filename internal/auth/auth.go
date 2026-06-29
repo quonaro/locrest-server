@@ -22,6 +22,7 @@ type Session struct {
 	SetupToken string
 	CreatedAt  time.Time
 	LastUsedAt time.Time
+	ExpiresAt  time.Time
 	Nonce      string
 	NonceAt    time.Time
 	Activated  bool
@@ -82,7 +83,7 @@ func NewStore() *Store {
 }
 
 // Create generates a new session with a setup token and chisel token.
-func (s *Store) Create(subdomain string, localPort, serverPort int, targetHost string) (*Session, error) {
+func (s *Store) Create(subdomain string, localPort, serverPort int, targetHost string, maxTTL time.Duration) (*Session, error) {
 	if targetHost == "" {
 		targetHost = "localhost"
 	}
@@ -103,6 +104,7 @@ func (s *Store) Create(subdomain string, localPort, serverPort int, targetHost s
 		SetupToken: setup,
 		CreatedAt:  time.Now(),
 		LastUsedAt: time.Now(),
+		ExpiresAt:  time.Now().Add(maxTTL),
 	}
 	s.mu.Lock()
 	s.sessions[setup] = sess
@@ -183,6 +185,17 @@ func (s *Store) Len() int {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	return len(s.sessions)
+}
+
+// All returns a snapshot of all sessions.
+func (s *Store) All() []*Session {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	out := make([]*Session, 0, len(s.sessions))
+	for _, sess := range s.sessions {
+		out = append(out, sess)
+	}
+	return out
 }
 
 // Expired returns all sessions whose last-used time is before the cutoff.

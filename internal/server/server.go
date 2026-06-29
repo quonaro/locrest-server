@@ -153,6 +153,7 @@ func (f *Frontend) startCleaner(ctx context.Context) {
 			f.mu.Lock()
 			for subdomain, port := range f.routes {
 				if tunnel.GetProxyPipe(port) == nil {
+					slog.Debug("cleaner: removing stale route", "subdomain", subdomain, "port", port)
 					f.chisel.DeleteUser(subdomain)
 					delete(f.routes, subdomain)
 				}
@@ -162,12 +163,25 @@ func (f *Frontend) startCleaner(ctx context.Context) {
 				cutoff := time.Now().Add(-f.cfg.ScriptTTL)
 				for _, sess := range f.store.Expired(cutoff) {
 					if tunnel.GetProxyPipe(sess.ServerPort) != nil {
+						slog.Debug("cleaner: extending active session", "subdomain", sess.Subdomain, "port", sess.ServerPort)
 						sess.Touch()
 						continue
 					}
+					slog.Info("cleaner: deleting expired session", "subdomain", sess.Subdomain, "setup_token_prefix", sess.SetupToken[:8])
 					f.chisel.DeleteUser(sess.Subdomain)
 					delete(f.routes, sess.Subdomain)
 					f.store.Delete(sess.SetupToken)
+				}
+			}
+			if f.cfg.MaxTTL > 0 {
+				now := time.Now()
+				for _, sess := range f.store.All() {
+					if now.After(sess.ExpiresAt) {
+						slog.Info("cleaner: deleting session (hard limit)", "subdomain", sess.Subdomain, "setup_token_prefix", sess.SetupToken[:8], "max_ttl", f.cfg.MaxTTL)
+						f.chisel.DeleteUser(sess.Subdomain)
+						delete(f.routes, sess.Subdomain)
+						f.store.Delete(sess.SetupToken)
+					}
 				}
 			}
 			f.mu.Unlock()
