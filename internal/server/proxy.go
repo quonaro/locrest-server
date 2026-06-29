@@ -71,17 +71,6 @@ func (f *Frontend) proxyWebSocket(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if sess, ok2 := f.store.GetBySubdomain(host); ok2 {
-		sess.Touch()
-	} else {
-		parts := strings.SplitN(host, ".", 2)
-		if len(parts) == 2 {
-			if sess, ok2 := f.store.GetBySubdomain(parts[0]); ok2 {
-				sess.Touch()
-			}
-		}
-	}
-
 	pipeCh := tunnel.GetProxyPipe(backendPort)
 	if pipeCh == nil {
 		f.sendHTMLError(w, r, http.StatusNotFound, "Tunnel Not Found", "No active tunnel for this host. The tunnel may have expired or the subdomain is incorrect.")
@@ -219,17 +208,6 @@ func (f *Frontend) proxyTunnel(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		f.sendHTMLError(w, r, http.StatusNotFound, "Tunnel Not Found", "No active tunnel for this host. The tunnel may have expired or the subdomain is incorrect.")
 		return
-	}
-
-	if sess, ok2 := f.store.GetBySubdomain(host); ok2 {
-		sess.Touch()
-	} else {
-		parts := strings.SplitN(host, ".", 2)
-		if len(parts) == 2 {
-			if sess, ok2 := f.store.GetBySubdomain(parts[0]); ok2 {
-				sess.Touch()
-			}
-		}
 	}
 
 	pipeCh := tunnel.GetProxyPipe(backendPort)

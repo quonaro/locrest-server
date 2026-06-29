@@ -24,8 +24,8 @@ type ServerConfig struct {
 	Port            int           `yaml:"port"`
 	Domain          string        `yaml:"domain"`
 	TLS             TLSConfig     `yaml:"tls"`
-	ScriptTTL       time.Duration `yaml:"script_ttl"`
-	MaxTTL          time.Duration `yaml:"max_ttl"`
+	TTL             time.Duration `yaml:"ttl"`
+	TTLLimit        time.Duration `yaml:"ttl_limit"`
 	Insecure        bool          `yaml:"insecure"`
 	Dev             bool          `yaml:"dev"`
 	BinaryURL       string        `yaml:"binary_url"`
@@ -41,8 +41,8 @@ func DefaultConfig() *ServerConfig {
 	return &ServerConfig{
 		Port:      80,
 		Domain:    "localtest.me",
-		ScriptTTL: 5 * time.Minute,
-		MaxTTL:    1 * time.Hour,
+		TTL:       1 * time.Hour,
+		TTLLimit:  7 * 24 * time.Hour,
 		BinaryURL: "https://github.com/locrest/locrest/releases/latest/download",
 	}
 }
@@ -71,8 +71,8 @@ func Load(path string) (*ServerConfig, error) {
 	flag.StringVar(&cfg.TLS.Key, "tls-key", cfg.TLS.Key, "TLS private key path")
 	flag.BoolVar(&cfg.TLS.AutoTLS, "auto-tls", cfg.TLS.AutoTLS, "enable autocert (Let's Encrypt)")
 	flag.StringVar(&cfg.TLS.Email, "tls-email", cfg.TLS.Email, "autocert contact email")
-	flag.DurationVar(&cfg.ScriptTTL, "script-ttl", cfg.ScriptTTL, "script/keypair TTL")
-	flag.DurationVar(&cfg.MaxTTL, "max-ttl", cfg.MaxTTL, "absolute hard session lifetime limit")
+	flag.DurationVar(&cfg.TTL, "ttl", cfg.TTL, "default session lifetime")
+	flag.DurationVar(&cfg.TTLLimit, "ttl-limit", cfg.TTLLimit, "maximum allowed session lifetime")
 	flag.BoolVar(&cfg.Insecure, "insecure", cfg.Insecure, "also listen on :80 without TLS when TLS is configured")
 	flag.BoolVar(&cfg.Dev, "dev", cfg.Dev, "serve embedded client binaries from embedbin/bin")
 	flag.StringVar(&cfg.BinaryURL, "binary-url", cfg.BinaryURL, "base URL for client binaries (used when dev=false)")

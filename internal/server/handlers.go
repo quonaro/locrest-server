@@ -22,6 +22,24 @@ func (f *Frontend) handleScript(w http.ResponseWriter, r *http.Request, localPor
 		return
 	}
 
+	ttl := f.cfg.TTL
+	if raw := r.URL.Query().Get("ttl"); raw != "" {
+		reqTTL, err := time.ParseDuration(raw)
+		if err != nil {
+			http.Error(w, "Invalid ttl: expected duration like 1h, 30m, 90s", http.StatusBadRequest)
+			return
+		}
+		if reqTTL > f.cfg.TTLLimit {
+			http.Error(w, fmt.Sprintf("Requested ttl %s exceeds maximum %s", reqTTL, f.cfg.TTLLimit), http.StatusBadRequest)
+			return
+		}
+		if reqTTL <= 0 {
+			http.Error(w, "ttl must be positive", http.StatusBadRequest)
+			return
+		}
+		ttl = reqTTL
+	}
+
 	serverPort := f.NextServerPort()
 
 	var subdomain string
@@ -37,7 +55,7 @@ func (f *Frontend) handleScript(w http.ResponseWriter, r *http.Request, localPor
 		}
 	}
 
-	sess, err := f.store.Create(subdomain, localPort, serverPort, targetHost, f.cfg.MaxTTL)
+	sess, err := f.store.Create(subdomain, localPort, serverPort, targetHost, ttl)
 	if err != nil {
 		http.Error(w, "Failed to create session", http.StatusInternalServerError)
 		return
@@ -61,7 +79,7 @@ func (f *Frontend) handleScript(w http.ResponseWriter, r *http.Request, localPor
 	flags := map[string]string{
 		"debug": r.URL.Query().Get("debug"),
 	}
-	scr, err := script.Generate(serverURL, sess, r.UserAgent(), flags, f.cfg.ScriptTTL)
+	scr, err := script.Generate(serverURL, sess, r.UserAgent(), flags, ttl)
 	if err != nil {
 		http.Error(w, "Script generation failed", http.StatusInternalServerError)
 		return

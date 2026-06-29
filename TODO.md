@@ -12,6 +12,6 @@
 
 4. **Graceful cleanup при disconnect клиента** — `chiselwrapper.DeleteUser` и `Frontend.UnregisterRoute` существуют, но не вызываются при обрыве соединения. Нужен callback/hook на disconnect от Chisel, чтобы мгновенно чистить пользователя и маршрут из routing table.
 
-5. **Script TTL трекинг** — `ScriptTTL` задаётся в конфиге, но фоновый `startCleaner` в `server.go` проверяет только `GetProxyPipe == nil`, а не время жизни сессии. Auth store cleaner есть, но маршруты чистятся только по pipe.
+5. **Session TTL tracking** — `TTL` is a single hard limit; sessions expire unconditionally after this duration.
 
 6. **Embedbin binaries** — бинарники клиента (`locrest-client-*`) лежат в `internal/embedbin/bin/`, но директория не попадает в git (`.gitignore`). Нужен CI/CD или `make` target для сборки и встраивания бинарей.

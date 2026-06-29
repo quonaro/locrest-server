@@ -21,7 +21,6 @@ type Session struct {
 	Token      string
 	SetupToken string
 	CreatedAt  time.Time
-	LastUsedAt time.Time
 	ExpiresAt  time.Time
 	Nonce      string
 	NonceAt    time.Time
@@ -62,13 +61,6 @@ func (sess *Session) IsActivated() bool {
 	return sess.Activated
 }
 
-// Touch updates the last-used timestamp.
-func (sess *Session) Touch() {
-	sess.mu.Lock()
-	sess.LastUsedAt = time.Now()
-	sess.mu.Unlock()
-}
-
 // Store is an in-memory session map keyed by setup token.
 type Store struct {
 	mu       sync.RWMutex
@@ -83,7 +75,7 @@ func NewStore() *Store {
 }
 
 // Create generates a new session with a setup token and chisel token.
-func (s *Store) Create(subdomain string, localPort, serverPort int, targetHost string, maxTTL time.Duration) (*Session, error) {
+func (s *Store) Create(subdomain string, localPort, serverPort int, targetHost string, ttl time.Duration) (*Session, error) {
 	if targetHost == "" {
 		targetHost = "localhost"
 	}
@@ -103,8 +95,7 @@ func (s *Store) Create(subdomain string, localPort, serverPort int, targetHost s
 		Token:      token,
 		SetupToken: setup,
 		CreatedAt:  time.Now(),
-		LastUsedAt: time.Now(),
-		ExpiresAt:  time.Now().Add(maxTTL),
+		ExpiresAt:  time.Now().Add(ttl),
 	}
 	s.mu.Lock()
 	s.sessions[setup] = sess
@@ -194,25 +185,6 @@ func (s *Store) All() []*Session {
 	out := make([]*Session, 0, len(s.sessions))
 	for _, sess := range s.sessions {
 		out = append(out, sess)
-	}
-	return out
-}
-
-// Expired returns all sessions whose last-used time is before the cutoff.
-func (s *Store) Expired(cutoff time.Time) []*Session {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-	var out []*Session
-	for _, sess := range s.sessions {
-		sess.mu.Lock()
-		last := sess.LastUsedAt
-		if last.IsZero() {
-			last = sess.CreatedAt
-		}
-		sess.mu.Unlock()
-		if last.Before(cutoff) {
-			out = append(out, sess)
-		}
 	}
 	return out
 }
