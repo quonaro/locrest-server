@@ -52,7 +52,7 @@ func shellEscape(s string) string {
 	var b strings.Builder
 	for _, r := range s {
 		switch r {
-		case '"', '$', '`', '\\':
+		case '"', '$', '`', '\\', '\n', '\r':
 			b.WriteByte('\\')
 		}
 		b.WriteRune(r)
@@ -64,6 +64,8 @@ var scriptTemplate = template.Must(template.New("install").Parse(`#!/bin/sh
 set -e
 
 # Locrest ephemeral tunnel client
+trap 'echo "Interrupted" >&2; exit 0' INT TERM
+
 OS="{{.OS}}"
 ARCH=$(uname -m)
 case "$ARCH" in

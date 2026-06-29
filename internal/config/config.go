@@ -30,6 +30,7 @@ type ServerConfig struct {
 	Dev             bool          `yaml:"dev"`
 	BinaryURL       string        `yaml:"binary_url"`
 	StripErrorParam bool          `yaml:"strip_error_param"`
+	BehindProxy     bool          `yaml:"behind_proxy"`
 }
 
 type yamlRoot struct {
@@ -77,6 +78,7 @@ func Load(path string) (*ServerConfig, error) {
 	flag.BoolVar(&cfg.Dev, "dev", cfg.Dev, "serve embedded client binaries from embedbin/bin")
 	flag.StringVar(&cfg.BinaryURL, "binary-url", cfg.BinaryURL, "base URL for client binaries (used when dev=false)")
 	flag.BoolVar(&cfg.StripErrorParam, "strip-error-param", cfg.StripErrorParam, "strip the 'error' query parameter before forwarding to backend")
+	flag.BoolVar(&cfg.BehindProxy, "behind-proxy", cfg.BehindProxy, "trust X-Forwarded-For and X-Real-Ip headers for client IP")
 	flag.Parse()
 
 	return cfg, nil

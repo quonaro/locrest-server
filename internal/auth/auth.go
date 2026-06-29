@@ -79,8 +79,9 @@ func NewStore() *Store {
 	}
 }
 
-// Create generates a new session with a setup token and chisel token.
-func (s *Store) Create(subdomain string, localPort, serverPort int, targetHost string, ttl time.Duration) (*Session, error) {
+// Create generates a new session with a unique subdomain, setup token and chisel token.
+// The subdomain is generated internally with an atomic collision check.
+func (s *Store) Create(localPort, serverPort int, targetHost string, ttl time.Duration, subdomainLen int) (*Session, error) {
 	if targetHost == "" {
 		targetHost = "localhost"
 	}
@@ -92,6 +93,24 @@ func (s *Store) Create(subdomain string, localPort, serverPort int, targetHost s
 	if err != nil {
 		return nil, fmt.Errorf("generate setup token: %w", err)
 	}
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	var subdomain string
+	for attempts := 0; attempts < 100; attempts++ {
+		subdomain, err = RandString(subdomainLen)
+		if err != nil {
+			return nil, fmt.Errorf("generate subdomain: %w", err)
+		}
+		if _, exists := s.bySubdomain[subdomain]; !exists {
+			break
+		}
+	}
+	if _, exists := s.bySubdomain[subdomain]; exists {
+		return nil, fmt.Errorf("could not generate unique subdomain")
+	}
+
 	sess := &Session{
 		Subdomain:  subdomain,
 		LocalPort:  localPort,
@@ -102,10 +121,8 @@ func (s *Store) Create(subdomain string, localPort, serverPort int, targetHost s
 		CreatedAt:  time.Now(),
 		ExpiresAt:  time.Now().Add(ttl),
 	}
-	s.mu.Lock()
 	s.sessions[setup] = sess
 	s.bySubdomain[subdomain] = sess
-	s.mu.Unlock()
 	return sess, nil
 }
 

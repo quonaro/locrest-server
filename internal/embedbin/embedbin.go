@@ -30,7 +30,10 @@ func init() {
 			continue
 		}
 		h := sha256.New()
-		io.Copy(h, f)
+		if _, err := io.Copy(h, f); err != nil {
+			f.Close()
+			continue
+		}
 		f.Close()
 		checksums[entry.Name()] = hex.EncodeToString(h.Sum(nil))
 	}

@@ -162,16 +162,17 @@ func (f *Frontend) proxyWebSocket(w http.ResponseWriter, r *http.Request) {
 
 	var wg sync.WaitGroup
 	wg.Add(2)
-	const readTimeout = 60 * time.Second
+	const pipeTimeout = 60 * time.Second
 	go func() {
 		defer wg.Done()
 		for {
-			backendConn.SetReadDeadline(time.Now().Add(readTimeout))
+			backendConn.SetReadDeadline(time.Now().Add(pipeTimeout))
 			mt, msg, err := backendConn.ReadMessage()
 			if err != nil {
 				clientConn.Close()
 				return
 			}
+			clientConn.SetWriteDeadline(time.Now().Add(pipeTimeout))
 			if err := clientConn.WriteMessage(mt, msg); err != nil {
 				return
 			}
@@ -180,12 +181,13 @@ func (f *Frontend) proxyWebSocket(w http.ResponseWriter, r *http.Request) {
 	go func() {
 		defer wg.Done()
 		for {
-			clientConn.SetReadDeadline(time.Now().Add(readTimeout))
+			clientConn.SetReadDeadline(time.Now().Add(pipeTimeout))
 			mt, msg, err := clientConn.ReadMessage()
 			if err != nil {
 				backendConn.Close()
 				return
 			}
+			backendConn.SetWriteDeadline(time.Now().Add(pipeTimeout))
 			if err := backendConn.WriteMessage(mt, msg); err != nil {
 				return
 			}

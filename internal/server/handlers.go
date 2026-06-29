@@ -17,17 +17,19 @@ import (
 
 const maxSessions = 10000
 
-func clientIP(r *http.Request) string {
-	ip := r.Header.Get("X-Forwarded-For")
-	if ip != "" {
-		parts := strings.Split(ip, ",")
-		if len(parts) > 0 {
-			return strings.TrimSpace(parts[0])
+func clientIP(r *http.Request, behindProxy bool) string {
+	if behindProxy {
+		ip := r.Header.Get("X-Forwarded-For")
+		if ip != "" {
+			parts := strings.Split(ip, ",")
+			if len(parts) > 0 {
+				return strings.TrimSpace(parts[0])
+			}
 		}
-	}
-	ip = r.Header.Get("X-Real-Ip")
-	if ip != "" {
-		return strings.TrimSpace(ip)
+		ip = r.Header.Get("X-Real-Ip")
+		if ip != "" {
+			return strings.TrimSpace(ip)
+		}
 	}
 	host, _, err := net.SplitHostPort(r.RemoteAddr)
 	if err == nil {
@@ -37,7 +39,7 @@ func clientIP(r *http.Request) string {
 }
 
 func (f *Frontend) handleScript(w http.ResponseWriter, r *http.Request, localPort, remotePort int, targetHost string) {
-	if !f.rateLimiter.allow(clientIP(r)) {
+	if !f.rateLimiter.allow(clientIP(r, f.cfg.BehindProxy)) {
 		http.Error(w, "Rate limit exceeded", http.StatusTooManyRequests)
 		return
 	}
@@ -66,20 +68,7 @@ func (f *Frontend) handleScript(w http.ResponseWriter, r *http.Request, localPor
 
 	serverPort := f.NextServerPort()
 
-	var subdomain string
-	for {
-		var err error
-		subdomain, err = auth.RandString(16)
-		if err != nil {
-			http.Error(w, "Random generation failed", http.StatusInternalServerError)
-			return
-		}
-		if !f.store.HasSubdomain(subdomain) {
-			break
-		}
-	}
-
-	sess, err := f.store.Create(subdomain, localPort, serverPort, targetHost, ttl)
+	sess, err := f.store.Create(localPort, serverPort, targetHost, ttl, 16)
 	if err != nil {
 		http.Error(w, "Failed to create session", http.StatusInternalServerError)
 		return
