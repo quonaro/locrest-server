@@ -104,6 +104,8 @@ export LOCREST_SETUP_TOKEN="{{.SetupToken}}"
 # Supervisor loop with exponential backoff
 BACKOFF=1
 MAX_BACKOFF=30
+ORANGE='\033[38;5;208m'
+RESET='\033[0m'
 while true; do
   if "$BIN" \
     -server "{{.WSServerURL}}/tunnel" \
@@ -112,7 +114,12 @@ while true; do
     -host "{{.TargetHost}}"{{end}}{{.ExtraFlags}}; then
     BACKOFF=1
   else
-    echo "locrest-client exited ($?), restarting in ${BACKOFF}s..." >&2
+    EXIT_CODE=$?
+    if [ "$EXIT_CODE" -eq 2 ]; then
+      printf "${ORANGE}Exited (%d), session expired or invalid — not retrying${RESET}" "$EXIT_CODE" >&2
+      break
+    fi
+    printf "${ORANGE}Exited (%d), retrying in %ds...${RESET}" "$EXIT_CODE" "$BACKOFF" >&2
     sleep "$BACKOFF"
     BACKOFF=$((BACKOFF * 2))
     if [ "$BACKOFF" -gt "$MAX_BACKOFF" ]; then
