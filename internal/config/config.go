@@ -21,14 +21,15 @@ type TLSConfig struct {
 
 // ServerConfig is the runtime configuration.
 type ServerConfig struct {
-	Port      int           `yaml:"port"`
-	Domain    string        `yaml:"domain"`
-	TLS       TLSConfig     `yaml:"tls"`
-	ScriptTTL time.Duration `yaml:"script_ttl"`
-	MaxTTL    time.Duration `yaml:"max_ttl"`
-	Insecure  bool          `yaml:"insecure"`
-	Dev       bool          `yaml:"dev"`
-	BinaryURL string        `yaml:"binary_url"`
+	Port            int           `yaml:"port"`
+	Domain          string        `yaml:"domain"`
+	TLS             TLSConfig     `yaml:"tls"`
+	ScriptTTL       time.Duration `yaml:"script_ttl"`
+	MaxTTL          time.Duration `yaml:"max_ttl"`
+	Insecure        bool          `yaml:"insecure"`
+	Dev             bool          `yaml:"dev"`
+	BinaryURL       string        `yaml:"binary_url"`
+	StripErrorParam bool          `yaml:"strip_error_param"`
 }
 
 type yamlRoot struct {
@@ -75,6 +76,7 @@ func Load(path string) (*ServerConfig, error) {
 	flag.BoolVar(&cfg.Insecure, "insecure", cfg.Insecure, "also listen on :80 without TLS when TLS is configured")
 	flag.BoolVar(&cfg.Dev, "dev", cfg.Dev, "serve embedded client binaries from embedbin/bin")
 	flag.StringVar(&cfg.BinaryURL, "binary-url", cfg.BinaryURL, "base URL for client binaries (used when dev=false)")
+	flag.BoolVar(&cfg.StripErrorParam, "strip-error-param", cfg.StripErrorParam, "strip the 'error' query parameter before forwarding to backend")
 	flag.Parse()
 
 	return cfg, nil

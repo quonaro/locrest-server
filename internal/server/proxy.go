@@ -2,7 +2,10 @@ package server
 
 import (
 	"context"
+	_ "embed"
+	"encoding/json"
 	"fmt"
+	"html/template"
 	"io"
 	"net"
 	"net/http"
@@ -15,6 +18,38 @@ import (
 
 	tunnel "locrest-server/internal/chiselvendor/tunnel"
 )
+
+//go:embed assets/error.html
+var errorPageBytes []byte
+
+var errorPageTmpl = template.Must(template.New("error").Parse(string(errorPageBytes)))
+
+func (f *Frontend) sendHTMLError(w http.ResponseWriter, r *http.Request, code int, title, message string) {
+	if r.URL.Query().Get("error") == "json" {
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
+		w.WriteHeader(code)
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"status":  code,
+			"error":   title,
+			"message": message,
+		})
+		return
+	}
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.WriteHeader(code)
+	_ = errorPageTmpl.Execute(w, map[string]any{
+		"Code":    code,
+		"Title":   title,
+		"Message": message,
+		"Domain":  f.cfg.Domain,
+	})
+}
+
+func stripErrorParam(rawQuery string) string {
+	q, _ := url.ParseQuery(rawQuery)
+	q.Del("error")
+	return q.Encode()
+}
 
 func (f *Frontend) proxyWebSocket(w http.ResponseWriter, r *http.Request) {
 	host := r.Host
@@ -32,7 +67,7 @@ func (f *Frontend) proxyWebSocket(w http.ResponseWriter, r *http.Request) {
 	}
 	f.mu.RUnlock()
 	if !ok {
-		http.Error(w, "No active tunnel for this host", http.StatusNotFound)
+		f.sendHTMLError(w, r, http.StatusNotFound, "Tunnel Not Found", "No active tunnel for this host. The tunnel may have expired or the subdomain is incorrect.")
 		return
 	}
 
@@ -49,7 +84,7 @@ func (f *Frontend) proxyWebSocket(w http.ResponseWriter, r *http.Request) {
 
 	pipeCh := tunnel.GetProxyPipe(backendPort)
 	if pipeCh == nil {
-		http.Error(w, "No active tunnel for this host", http.StatusNotFound)
+		f.sendHTMLError(w, r, http.StatusNotFound, "Tunnel Not Found", "No active tunnel for this host. The tunnel may have expired or the subdomain is incorrect.")
 		return
 	}
 
@@ -82,11 +117,17 @@ func (f *Frontend) proxyWebSocket(w http.ResponseWriter, r *http.Request) {
 	// Preserve the original Host so the backend sees the public domain, not "localhost".
 	header.Set("Host", r.Host)
 
-	backendURL := fmt.Sprintf("ws://localhost%s", r.URL.RequestURI())
+	uri := r.URL.RequestURI()
+	if f.cfg.StripErrorParam {
+		u := *r.URL
+		u.RawQuery = stripErrorParam(u.RawQuery)
+		uri = u.RequestURI()
+	}
+	backendURL := fmt.Sprintf("ws://localhost%s", uri)
 	backendConn, resp, err := dialer.Dial(backendURL, header)
 	if err != nil {
 		if strings.Contains(err.Error(), "tunnel pipe full") {
-			http.Error(w, "Tunnel overloaded", http.StatusServiceUnavailable)
+			f.sendHTMLError(w, r, http.StatusServiceUnavailable, "Tunnel Overloaded", "The tunnel is currently overloaded. Please try again in a moment.")
 			return
 		}
 		if resp != nil {
@@ -94,7 +135,7 @@ func (f *Frontend) proxyWebSocket(w http.ResponseWriter, r *http.Request) {
 			io.Copy(w, resp.Body)
 			resp.Body.Close()
 		} else {
-			http.Error(w, "backend unavailable", http.StatusBadGateway)
+			f.sendHTMLError(w, r, http.StatusBadGateway, "Backend Unavailable", "The backend service is temporarily unavailable.")
 		}
 		return
 	}
@@ -176,7 +217,7 @@ func (f *Frontend) proxyTunnel(w http.ResponseWriter, r *http.Request) {
 	}
 	f.mu.RUnlock()
 	if !ok {
-		http.Error(w, "No active tunnel for this host", http.StatusNotFound)
+		f.sendHTMLError(w, r, http.StatusNotFound, "Tunnel Not Found", "No active tunnel for this host. The tunnel may have expired or the subdomain is incorrect.")
 		return
 	}
 
@@ -193,7 +234,7 @@ func (f *Frontend) proxyTunnel(w http.ResponseWriter, r *http.Request) {
 
 	pipeCh := tunnel.GetProxyPipe(backendPort)
 	if pipeCh == nil {
-		http.Error(w, "No active tunnel for this host", http.StatusNotFound)
+		f.sendHTMLError(w, r, http.StatusNotFound, "Tunnel Not Found", "No active tunnel for this host. The tunnel may have expired or the subdomain is incorrect.")
 		return
 	}
 
@@ -213,14 +254,17 @@ func (f *Frontend) proxyTunnel(w http.ResponseWriter, r *http.Request) {
 		Director: func(req *http.Request) {
 			req.URL.Scheme = "http"
 			req.URL.Host = r.Host
+			if f.cfg.StripErrorParam {
+				req.URL.RawQuery = stripErrorParam(req.URL.RawQuery)
+			}
 		},
 		Transport: tr,
 		ErrorHandler: func(w http.ResponseWriter, r *http.Request, err error) {
 			if strings.Contains(err.Error(), "tunnel pipe full") {
-				http.Error(w, "Tunnel overloaded", http.StatusServiceUnavailable)
+				f.sendHTMLError(w, r, http.StatusServiceUnavailable, "Tunnel Overloaded", "The tunnel is currently overloaded. Please try again in a moment.")
 				return
 			}
-			http.Error(w, "backend unavailable", http.StatusBadGateway)
+			f.sendHTMLError(w, r, http.StatusBadGateway, "Backend Unavailable", "The backend service is temporarily unavailable.")
 		},
 	}
 	proxy.ServeHTTP(w, r)
