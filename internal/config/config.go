@@ -48,6 +48,7 @@ type ServerConfig struct {
 	StripErrorParam bool              `yaml:"strip_error_param"`
 	BehindProxy     bool              `yaml:"behind_proxy"`
 	DBPath          string            `yaml:"db_path"`
+	RootPage        bool              `yaml:"root_page"`
 	Permissions     PermissionsConfig `yaml:"permissions"`
 }
 
@@ -65,6 +66,7 @@ func DefaultConfig() *ServerConfig {
 		TTLLimit:  7 * 24 * time.Hour,
 		BinaryURL: "https://github.com/locrest/locrest/releases/latest/download",
 		DBPath:    "locrest.db",
+		RootPage:  true,
 		Permissions: PermissionsConfig{
 			Public: Permissions{
 				CreateTunnel: true,
@@ -117,6 +119,7 @@ func Load(path string) (*ServerConfig, error) {
 	flag.BoolVar(&cfg.StripErrorParam, "strip-error-param", cfg.StripErrorParam, "strip the 'error' query parameter before forwarding to backend")
 	flag.BoolVar(&cfg.BehindProxy, "behind-proxy", cfg.BehindProxy, "trust X-Forwarded-For and X-Real-Ip headers for client IP")
 	flag.StringVar(&cfg.DBPath, "db-path", cfg.DBPath, "path to BoltDB file")
+	flag.BoolVar(&cfg.RootPage, "root-page", cfg.RootPage, "serve landing page on root host")
 	flag.Parse()
 
 	return cfg, nil

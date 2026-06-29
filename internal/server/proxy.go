@@ -24,7 +24,11 @@ import (
 //go:embed assets/error.html
 var errorPageBytes []byte
 
+//go:embed assets/root.html
+var rootPageBytes []byte
+
 var errorPageTmpl = template.Must(template.New("error").Parse(string(errorPageBytes)))
+var rootPageTmpl = template.Must(template.New("root").Parse(string(rootPageBytes)))
 
 func (f *Frontend) sendHTMLError(w http.ResponseWriter, r *http.Request, code int, title, message string) {
 	if r.URL.Query().Get("error") == "json" {
@@ -77,9 +81,28 @@ func (f *Frontend) checkBasicAuth(w http.ResponseWriter, r *http.Request, subdom
 	return true
 }
 
+func (f *Frontend) isRootHost(host string) bool {
+	if colonIdx := strings.LastIndex(host, ":"); colonIdx != -1 {
+		host = host[:colonIdx]
+	}
+	return host == f.cfg.Domain
+}
+
+func (f *Frontend) handleRoot(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.WriteHeader(http.StatusOK)
+	_ = rootPageTmpl.Execute(w, map[string]any{
+		"Domain": f.cfg.Domain,
+	})
+}
+
 func (f *Frontend) proxyWebSocket(w http.ResponseWriter, r *http.Request) {
 	backendPort, subdomain, ok := f.resolveRoute(r.Host)
 	if !ok {
+		if f.cfg.RootPage && f.isRootHost(r.Host) {
+			f.handleRoot(w, r)
+			return
+		}
 		f.sendHTMLError(w, r, http.StatusNotFound, "Tunnel Not Found", "No active tunnel for this host. The tunnel may have expired or the subdomain is incorrect.")
 		return
 	}
@@ -214,6 +237,10 @@ func (f *Frontend) proxyWebSocket(w http.ResponseWriter, r *http.Request) {
 func (f *Frontend) proxyTunnel(w http.ResponseWriter, r *http.Request) {
 	backendPort, subdomain, ok := f.resolveRoute(r.Host)
 	if !ok {
+		if f.cfg.RootPage && f.isRootHost(r.Host) {
+			f.handleRoot(w, r)
+			return
+		}
 		f.sendHTMLError(w, r, http.StatusNotFound, "Tunnel Not Found", "No active tunnel for this host. The tunnel may have expired or the subdomain is incorrect.")
 		return
 	}

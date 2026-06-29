@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Locrest Tunnel</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  background: #0f1117;
+  color: #e2e8f0;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  padding: 1.5rem;
+}
+.card {
+  background: #1a1d26;
+  border: 1px solid #2d3142;
+  border-radius: 1rem;
+  max-width: 560px;
+  width: 100%;
+  text-align: center;
+  padding: 2.5rem 2rem;
+  box-shadow: 0 20px 40px rgba(0,0,0,0.35);
+}
+.icon {
+  width: 64px;
+  height: 64px;
+  margin: 0 auto 1.25rem;
+  background: #2d3142;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.75rem;
+}
+h1 {
+  font-size: 1.75rem;
+  font-weight: 700;
+  margin-bottom: 0.5rem;
+  line-height: 1.25;
+}
+.tagline {
+  color: #94a3b8;
+  font-size: 1.125rem;
+  margin-bottom: 2rem;
+}
+.feature {
+  text-align: left;
+  background: #0f1117;
+  border: 1px solid #2d3142;
+  border-radius: 0.75rem;
+  padding: 1.25rem;
+  margin-bottom: 1rem;
+}
+.feature-title {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: #e2e8f0;
+  margin-bottom: 0.25rem;
+}
+.feature-desc {
+  font-size: 0.875rem;
+  color: #64748b;
+  line-height: 1.5;
+}
+.cli {
+  margin-top: 1.5rem;
+  text-align: left;
+  background: #0f1117;
+  border: 1px solid #2d3142;
+  border-radius: 0.75rem;
+  padding: 1rem 1.25rem;
+  overflow-x: auto;
+}
+.cli-label {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: #64748b;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 0.5rem;
+}
+.cli pre {
+  font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+  font-size: 0.875rem;
+  color: #a5b4fc;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+.cli pre .comment {
+  color: #64748b;
+}
+.footer {
+  margin-top: 1.5rem;
+  font-size: 0.875rem;
+  color: #64748b;
+}
+</style>
+</head>
+<body>
+<div class="card">
+  <div class="icon">&#128640;</div>
+  <h1>Locrest Tunnel</h1>
+  <p class="tagline">Expose your local servers to the internet in seconds.</p>
+
+  <div class="feature">
+    <div class="feature-title">1. Pick a local port</div>
+    <div class="feature-desc">Replace <code>8080</code> with the port your app is running on locally.</div>
+  </div>
+  <div class="feature">
+    <div class="feature-title">2. Run the one-liner</div>
+    <div class="feature-desc">Copy the command below and paste it into your terminal.</div>
+  </div>
+
+  <div class="cli">
+    <div class="cli-label">Create a tunnel</div>
+    <pre><span class="comment"># Replace 8080 with your local port</span>
+curl -s https://{{.Domain}}/8080 | bash</pre>
+  </div>
+
+  <div class="footer">Locrest Tunnel</div>
+</div>
+</body>
+</html>

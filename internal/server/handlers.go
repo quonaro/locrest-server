@@ -106,7 +106,7 @@ func (f *Frontend) handleScript(w http.ResponseWriter, r *http.Request, localPor
 	flags := map[string]string{
 		"debug": r.URL.Query().Get("debug"),
 	}
-	scr, err := script.Generate(serverURL, sess, r.UserAgent(), flags, ttl)
+	scr, err := script.Generate(serverURL, f.cfg.BinaryURL, sess, r.UserAgent(), flags, ttl)
 	if err != nil {
 		http.Error(w, "Script generation failed", http.StatusInternalServerError)
 		return
