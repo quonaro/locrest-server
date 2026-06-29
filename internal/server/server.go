@@ -3,7 +3,9 @@ package server
 import (
 	"context"
 	"fmt"
+	"io"
 	"log/slog"
+	"net"
 	"net/http"
 	"regexp"
 	"strconv"
@@ -93,6 +95,8 @@ type Frontend struct {
 	nextPort              atomic.Uint32
 	rateLimiter           *rateLimiter
 	regenerateRateLimiter *rateLimiter
+	// serverPort -> raw TCP listener
+	tcpListeners map[int]net.Listener
 }
 
 // NewFrontend creates the HTTP frontend.
@@ -105,6 +109,7 @@ func NewFrontend(cfg *config.ServerConfig, store *auth.Store, chisel *chiselwrap
 		routes:                make(map[string]int),
 		rateLimiter:           newRateLimiter(10, time.Minute),
 		regenerateRateLimiter: newRateLimiter(3, time.Minute),
+		tcpListeners:          make(map[int]net.Listener),
 	}
 }
 
@@ -213,6 +218,18 @@ func (f *Frontend) UnregisterRoute(subdomain string) {
 	f.mu.Unlock()
 }
 
+// isPortInUse reports whether any active route already uses the given backend port.
+func (f *Frontend) isPortInUse(port int) bool {
+	f.mu.RLock()
+	defer f.mu.RUnlock()
+	for _, p := range f.routes {
+		if p == port {
+			return true
+		}
+	}
+	return false
+}
+
 func (f *Frontend) startCleaner(ctx context.Context) {
 	ticker := time.NewTicker(30 * time.Second)
 	defer ticker.Stop()
@@ -274,8 +291,73 @@ func (f *Frontend) cleanStaleRoutesAndSessions() {
 		sess, ok := f.store.Get(setupToken)
 		if ok {
 			slog.Info("cleaner: deleting expired session", "subdomain", sess.Subdomain, "setup_token_prefix", sess.SetupToken[:8], "ttl", f.cfg.TTL)
+			if sess.Mode == "tcp" {
+				f.closeTCPListener(sess.ServerPort)
+				f.chisel.DeleteUser(sess.Subdomain)
+			}
 		}
 		f.store.Delete(setupToken)
+	}
+}
+
+func (f *Frontend) startTCPListener(port int, setupToken string) {
+	addr := fmt.Sprintf(":%d", port)
+	ln, err := net.Listen("tcp", addr)
+	if err != nil {
+		slog.Error("tcp raw listen failed", "port", port, "error", err)
+		return
+	}
+	f.mu.Lock()
+	f.tcpListeners[port] = ln
+	f.mu.Unlock()
+
+	defer func() {
+		ln.Close()
+		f.mu.Lock()
+		delete(f.tcpListeners, port)
+		f.mu.Unlock()
+	}()
+
+	slog.Info("tcp raw listening", "port", port)
+	for {
+		conn, err := ln.Accept()
+		if err != nil {
+			slog.Debug("tcp raw accept error", "port", port, "error", err)
+			return
+		}
+		pipeCh := tunnel.GetProxyPipe(port)
+		if pipeCh == nil {
+			conn.Close()
+			continue
+		}
+		clientPipe, serverPipe := net.Pipe()
+		select {
+		case pipeCh <- serverPipe:
+		default:
+			clientPipe.Close()
+			conn.Close()
+			continue
+		}
+		go func(c net.Conn) {
+			defer clientPipe.Close()
+			defer c.Close()
+			var wg sync.WaitGroup
+			wg.Add(2)
+			go func() { io.Copy(clientPipe, c); wg.Done() }()
+			go func() { io.Copy(c, clientPipe); wg.Done() }()
+			wg.Wait()
+		}(conn)
+	}
+}
+
+func (f *Frontend) closeTCPListener(port int) {
+	f.mu.Lock()
+	ln := f.tcpListeners[port]
+	delete(f.tcpListeners, port)
+	f.mu.Unlock()
+	if ln != nil {
+		ln.Close()
+		slog.Debug("tcp raw listener closed", "port", port)
 	}
 }
 
@@ -307,17 +389,13 @@ func (f *Frontend) handler(w http.ResponseWriter, r *http.Request) {
 
 	if m := portPathRegex.FindStringSubmatch(path); m != nil && r.Method == http.MethodGet {
 		localPort, _ := strconv.Atoi(m[1])
-		f.handleScript(w, r, localPort, localPort, targetHost)
+		f.handleScript(w, r, localPort, 0, targetHost, "http")
 		return
 	}
 	if m := portsPathRegex.FindStringSubmatch(path); m != nil && r.Method == http.MethodGet {
 		localPort, _ := strconv.Atoi(m[1])
 		remotePort, _ := strconv.Atoi(m[2])
-		if r.URL.Query().Get("raw") == "tcp" {
-			f.handleRawTCP(w, r, localPort, remotePort, targetHost)
-		} else {
-			f.handleScript(w, r, localPort, remotePort, targetHost)
-		}
+		f.handleScript(w, r, localPort, remotePort, targetHost, "tcp")
 		return
 	}
 

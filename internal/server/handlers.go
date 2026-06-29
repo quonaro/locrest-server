@@ -6,12 +6,14 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"net"
 	"net/http"
 	"strings"
 	"time"
 
 	"locrest-server/internal/auth"
+	tunnel "locrest-server/internal/chiselvendor/tunnel"
 	"locrest-server/internal/config"
 	"locrest-server/internal/script"
 )
@@ -39,17 +41,10 @@ func clientIP(r *http.Request, behindProxy bool) string {
 	return r.RemoteAddr
 }
 
-func (f *Frontend) handleScript(w http.ResponseWriter, r *http.Request, localPort, remotePort int, targetHost string) {
-	rolePublic := !isAuthenticated(r, f.db)
-	var perms config.Permissions
-	if rolePublic {
-		perms = f.cfg.Permissions.Public
-	} else {
-		perms = f.cfg.Permissions.Auth
-	}
-	if !perms.CreateTunnel {
-		http.Error(w, "Forbidden", http.StatusForbidden)
-		return
+func (f *Frontend) handleScript(w http.ResponseWriter, r *http.Request, localPort, remotePort int, targetHost, mode string) {
+	role := "auth"
+	if !isAuthenticated(r, f.db) {
+		role = "public"
 	}
 	if !f.rateLimiter.allow(clientIP(r, f.cfg.BehindProxy)) {
 		http.Error(w, "Rate limit exceeded", http.StatusTooManyRequests)
@@ -60,15 +55,22 @@ func (f *Frontend) handleScript(w http.ResponseWriter, r *http.Request, localPor
 		return
 	}
 
+	rolePublic := role == "public"
 	ttl, err := effectiveTTL(r, f.cfg, rolePublic)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 
-	serverPort := f.NextServerPort()
+	serverPort := remotePort
+	if serverPort <= 0 {
+		serverPort = f.NextServerPort()
+	} else if f.isPortInUse(serverPort) {
+		http.Error(w, "Port already in use", http.StatusConflict)
+		return
+	}
 
-	sess, err := f.store.Create(localPort, serverPort, targetHost, ttl, 16)
+	sess, err := f.store.Create(localPort, serverPort, targetHost, ttl, 16, mode, role)
 	if err != nil {
 		http.Error(w, "Failed to create session", http.StatusInternalServerError)
 		return
@@ -189,16 +191,47 @@ func (f *Frontend) handleVerify(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	var perms config.Permissions
+	if sess.Role == "public" {
+		perms = f.cfg.Permissions.Public
+	} else {
+		perms = f.cfg.Permissions.Auth
+	}
+	if sess.Mode == "tcp" && !perms.RawTCP {
+		f.store.Delete(sess.SetupToken)
+		http.Error(w, "Permission DENIED", http.StatusForbidden)
+		return
+	}
+	if sess.Mode == "http" && !perms.CreateTunnel {
+		f.store.Delete(sess.SetupToken)
+		http.Error(w, "Permission DENIED", http.StatusForbidden)
+		return
+	}
+
 	if err := f.chisel.AddUser(sess.Subdomain, sess.Token); err != nil {
 		http.Error(w, "Failed to register user", http.StatusInternalServerError)
 		return
 	}
 
-	f.RegisterRoute(sess.Subdomain, sess.ServerPort)
+	if sess.Mode == "http" {
+		f.RegisterRoute(sess.Subdomain, sess.ServerPort)
+	}
 	sess.Activate()
 	if err := f.store.Activate(sess.SetupToken); err != nil {
 		http.Error(w, "Failed to activate session", http.StatusInternalServerError)
 		return
+	}
+	if sess.Mode == "tcp" {
+		go func(port int, setupToken string) {
+			for i := 0; i < 50; i++ {
+				if tunnel.GetProxyPipe(port) != nil {
+					f.startTCPListener(port, setupToken)
+					return
+				}
+				time.Sleep(100 * time.Millisecond)
+			}
+			slog.Warn("tcp raw: chisel pipe never created", "port", port)
+		}(sess.ServerPort, sess.SetupToken)
 	}
 
 	resp := map[string]interface{}{
@@ -206,6 +239,7 @@ func (f *Frontend) handleVerify(w http.ResponseWriter, r *http.Request) {
 		"server_port": sess.ServerPort,
 		"remote":      fmt.Sprintf("R:%d:%s:%d", sess.ServerPort, sess.TargetHost, sess.LocalPort),
 		"fingerprint": f.chisel.Fingerprint(),
+		"mode":        sess.Mode,
 	}
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(resp)

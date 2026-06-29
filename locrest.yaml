@@ -6,5 +6,8 @@ server:
   ttl_limit: 168h
   dev: true
   binary_url: "https://github.com/locrest/locrest/releases/latest/download"
+  permissions:
+    public:
+      raw_tcp: true
   tls:
     email: "admin@loc.rest"

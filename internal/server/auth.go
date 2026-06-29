@@ -34,12 +34,12 @@ func bearerUser(r *http.Request, database *db.DB) *db.User {
 	return user
 }
 
-// requireBearer checks the Authorization: Bearer header and writes 401 or 403 on failure.
+// requireBearer checks the Authorization: Bearer header and writes 403 on failure.
 // On success it stores the user in the request context and returns true.
 func requireBearer(w http.ResponseWriter, r *http.Request, database *db.DB) (*http.Request, bool) {
 	user := bearerUser(r, database)
 	if user == nil {
-		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		http.Error(w, "Permission DENIED", http.StatusForbidden)
 		return r, false
 	}
 	ctx := context.WithValue(r.Context(), userContextKey, user)

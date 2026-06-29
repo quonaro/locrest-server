@@ -12,7 +12,7 @@
       "applies_to": ["public", "auth"],
       "default_public": false,
       "default_auth": true,
-      "description": "Whether the role is allowed to open raw TCP tunnels via GET /:port/:port?raw=tcp."
+      "description": "Whether the role is allowed to open raw TCP tunnels via GET /:port/:port."
     },
     "set_ttl": {
       "type": "boolean",

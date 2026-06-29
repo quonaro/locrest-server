@@ -25,6 +25,8 @@ type sessionData struct {
 	Nonce      string    `json:"nonce"`
 	NonceAt    time.Time `json:"nonce_at"`
 	Activated  bool      `json:"activated"`
+	Mode       string    `json:"mode"`
+	Role       string    `json:"role"`
 }
 
 // Session holds tunnel metadata and the registered client public key.
@@ -42,6 +44,8 @@ type Session struct {
 	Nonce      string
 	NonceAt    time.Time
 	Activated  bool
+	Mode       string
+	Role       string
 }
 
 func (s *Session) toData() *sessionData {
@@ -50,6 +54,7 @@ func (s *Session) toData() *sessionData {
 		ServerPort: s.ServerPort, TargetHost: s.TargetHost, Token: s.Token,
 		SetupToken: s.SetupToken, CreatedAt: s.CreatedAt, ExpiresAt: s.ExpiresAt,
 		Nonce: s.Nonce, NonceAt: s.NonceAt, Activated: s.Activated,
+		Mode: s.Mode, Role: s.Role,
 	}
 }
 
@@ -66,6 +71,8 @@ func (s *Session) fromData(d *sessionData) {
 	s.Nonce = d.Nonce
 	s.NonceAt = d.NonceAt
 	s.Activated = d.Activated
+	s.Mode = d.Mode
+	s.Role = d.Role
 }
 
 // SetNonce stores a fresh nonce and its timestamp under lock.
@@ -103,7 +110,7 @@ func (sess *Session) IsActivated() bool {
 }
 
 // CreateSession generates a new session with a unique subdomain, setup token and chisel token.
-func (d *DB) CreateSession(localPort, serverPort int, targetHost string, ttl time.Duration, subdomainLen int) (*Session, error) {
+func (d *DB) CreateSession(localPort, serverPort int, targetHost string, ttl time.Duration, subdomainLen int, mode, role string) (*Session, error) {
 	if targetHost == "" {
 		targetHost = "localhost"
 	}
@@ -142,6 +149,8 @@ func (d *DB) CreateSession(localPort, serverPort int, targetHost string, ttl tim
 			SetupToken: setup,
 			CreatedAt:  time.Now(),
 			ExpiresAt:  time.Now().Add(ttl),
+			Mode:       mode,
+			Role:       role,
 		}
 		data, err := json.Marshal(sess.toData())
 		if err != nil {
