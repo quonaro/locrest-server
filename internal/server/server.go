@@ -67,8 +67,8 @@ func (f *Frontend) Run(ctx context.Context) error {
 	mux := http.NewServeMux()
 	mux.Handle("/tunnel", f.chisel.Handler())
 	mux.Handle("/tunnel/", f.chisel.Handler())
-	mux.HandleFunc("/bin/", embedbin.ServeBinary)
-	mux.HandleFunc("/key/", f.handleKey)
+	mux.HandleFunc("/bin/", embedbin.Handler)
+	mux.HandleFunc("/register", f.handleRegister)
 	mux.HandleFunc("/", f.handler)
 
 	tlsConfig, err := f.buildTLSConfig()
@@ -161,10 +161,9 @@ func (f *Frontend) startCleaner(ctx context.Context) {
 			if f.cfg.ScriptTTL > 0 {
 				cutoff := time.Now().Add(-f.cfg.ScriptTTL)
 				for _, sess := range f.store.Expired(cutoff) {
-					user, _, _ := strings.Cut(sess.SSHToken(), ":")
-					f.chisel.DeleteUser(user)
+					f.chisel.DeleteUser(sess.Subdomain)
 					delete(f.routes, sess.Subdomain)
-					f.store.Delete(sess.PublicKeyHex())
+					f.store.Delete(sess.SetupToken)
 				}
 			}
 			f.mu.Unlock()

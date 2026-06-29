@@ -1,7 +1,9 @@
 package server
 
 import (
+	"crypto/ed25519"
 	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -80,7 +82,7 @@ func (f *Frontend) handleChallenge(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Missing pubkey", http.StatusBadRequest)
 		return
 	}
-	sess, ok := f.store.Get(pubHex)
+	sess, ok := f.store.GetByPubkey(pubHex)
 	if !ok {
 		http.Error(w, "Unknown pubkey", http.StatusUnauthorized)
 		return
@@ -120,7 +122,7 @@ func (f *Frontend) handleVerify(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	sess, ok := f.store.Get(req.PubKey)
+	sess, ok := f.store.GetByPubkey(req.PubKey)
 	if !ok {
 		http.Error(w, "Unknown pubkey", http.StatusUnauthorized)
 		return
@@ -137,15 +139,20 @@ func (f *Frontend) handleVerify(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if !auth.VerifySignature(sess.PublicKey, []byte(req.Nonce), sig) {
+	pubBytes, err := hex.DecodeString(req.PubKey)
+	if err != nil || len(pubBytes) != ed25519.PublicKeySize {
+		http.Error(w, "Bad pubkey", http.StatusBadRequest)
+		return
+	}
+
+	if !auth.VerifySignature(ed25519.PublicKey(pubBytes), []byte(req.Nonce), sig) {
 		http.Error(w, "Invalid signature", http.StatusUnauthorized)
 		return
 	}
 
 	sess.Activate()
 
-	user, pass, _ := strings.Cut(sess.SSHToken(), ":")
-	if err := f.chisel.AddUser(user, pass); err != nil {
+	if err := f.chisel.AddUser(sess.Subdomain, sess.Token); err != nil {
 		http.Error(w, "Failed to register user", http.StatusInternalServerError)
 		return
 	}
@@ -162,26 +169,32 @@ func (f *Frontend) handleVerify(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(resp)
 }
 
-func (f *Frontend) handleKey(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
+func (f *Frontend) handleRegister(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
-	token := strings.TrimPrefix(r.URL.Path, "/key/")
-	if token == "" {
-		http.Error(w, "Missing token", http.StatusBadRequest)
+
+	r.Body = http.MaxBytesReader(w, r.Body, 64*1024)
+	var req struct {
+		SetupToken string `json:"setup_token"`
+		PubKey     string `json:"pubkey"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Bad request", http.StatusBadRequest)
 		return
 	}
-	sess := f.store.FindByRetrievalToken(token)
-	if sess == nil {
-		http.Error(w, "Not found", http.StatusNotFound)
+
+	if req.SetupToken == "" || req.PubKey == "" {
+		http.Error(w, "Missing setup_token or pubkey", http.StatusBadRequest)
 		return
 	}
-	if sess.IsActivated() {
-		http.Error(w, "Already activated", http.StatusConflict)
+
+	if !f.store.RegisterPubkey(req.SetupToken, req.PubKey) {
+		http.Error(w, "Invalid or already used setup token", http.StatusConflict)
 		return
 	}
-	sess.RetrievalToken = "" // burn after reading
-	w.Header().Set("Content-Type", "text/plain")
-	w.Write([]byte(sess.PrivateKeyHex()))
+
+	w.Header().Set("Content-Type", "application/json")
+	w.Write([]byte(`{"ok":true}`))
 }

@@ -10,21 +10,20 @@ import (
 	"time"
 )
 
-// Session holds the per-script ephemeral keypair and allocated port.
+// Session holds tunnel metadata and the registered client public key.
 type Session struct {
-	mu             sync.Mutex
-	PrivateKey     ed25519.PrivateKey
-	PublicKey      ed25519.PublicKey
-	Subdomain      string
-	LocalPort      int
-	ServerPort     int
-	TargetHost     string
-	Token          string
-	RetrievalToken string
-	CreatedAt      time.Time
-	Nonce          string
-	NonceAt        time.Time
-	Activated      bool
+	mu         sync.Mutex
+	PubKey     []byte
+	Subdomain  string
+	LocalPort  int
+	ServerPort int
+	TargetHost string
+	Token      string
+	SetupToken string
+	CreatedAt  time.Time
+	Nonce      string
+	NonceAt    time.Time
+	Activated  bool
 }
 
 // SetNonce stores a fresh nonce and its timestamp under lock.
@@ -61,10 +60,10 @@ func (sess *Session) IsActivated() bool {
 	return sess.Activated
 }
 
-// Store is an in-memory session map.
+// Store is an in-memory session map keyed by setup token.
 type Store struct {
 	mu       sync.RWMutex
-	sessions map[string]*Session // keyed by public-key hex
+	sessions map[string]*Session // keyed by setup token
 }
 
 // NewStore creates a session store.
@@ -74,52 +73,75 @@ func NewStore() *Store {
 	}
 }
 
-// Create generates a fresh ED25519 keypair and session entry.
+// Create generates a new session with a setup token and chisel token.
 func (s *Store) Create(subdomain string, localPort, serverPort int, targetHost string) (*Session, error) {
 	if targetHost == "" {
 		targetHost = "localhost"
-	}
-	_, priv, err := ed25519.GenerateKey(rand.Reader)
-	if err != nil {
-		return nil, fmt.Errorf("generate key: %w", err)
 	}
 	token, err := randHex(32)
 	if err != nil {
 		return nil, fmt.Errorf("generate token: %w", err)
 	}
-	retrieval, err := randHex(32)
+	setup, err := randHex(32)
 	if err != nil {
-		return nil, fmt.Errorf("generate retrieval token: %w", err)
+		return nil, fmt.Errorf("generate setup token: %w", err)
 	}
 	sess := &Session{
-		PrivateKey:     priv,
-		PublicKey:      priv.Public().(ed25519.PublicKey),
-		Subdomain:      subdomain,
-		LocalPort:      localPort,
-		ServerPort:     serverPort,
-		TargetHost:     targetHost,
-		Token:          token,
-		RetrievalToken: retrieval,
-		CreatedAt:      time.Now(),
+		Subdomain:  subdomain,
+		LocalPort:  localPort,
+		ServerPort: serverPort,
+		TargetHost: targetHost,
+		Token:      token,
+		SetupToken: setup,
+		CreatedAt:  time.Now(),
 	}
 	s.mu.Lock()
-	s.sessions[sess.PublicKeyHex()] = sess
+	s.sessions[setup] = sess
 	s.mu.Unlock()
 	return sess, nil
 }
 
-// Get retrieves a session by public-key hex.
-func (s *Store) Get(pubHex string) (*Session, bool) {
+// Get retrieves a session by setup token.
+func (s *Store) Get(setupToken string) (*Session, bool) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	sess, ok := s.sessions[pubHex]
+	sess, ok := s.sessions[setupToken]
 	return sess, ok
 }
 
-// Delete removes a session.
-func (s *Store) Delete(pubHex string) {
+// GetByPubkey finds a session by its registered public key (hex).
+func (s *Store) GetByPubkey(pubHex string) (*Session, bool) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	for _, sess := range s.sessions {
+		if hex.EncodeToString(sess.PubKey) == pubHex {
+			return sess, true
+		}
+	}
+	return nil, false
+}
+
+// RegisterPubkey links a public key to a pending session.
+// Returns false if the token is unknown, already activated, or already has a pubkey.
+func (s *Store) RegisterPubkey(setupToken, pubHex string) bool {
 	s.mu.Lock()
-	delete(s.sessions, pubHex)
+	defer s.mu.Unlock()
+	sess, ok := s.sessions[setupToken]
+	if !ok || sess.Activated || len(sess.PubKey) > 0 {
+		return false
+	}
+	b, err := hex.DecodeString(pubHex)
+	if err != nil {
+		return false
+	}
+	sess.PubKey = b
+	return true
+}
+
+// Delete removes a session.
+func (s *Store) Delete(setupToken string) {
+	s.mu.Lock()
+	delete(s.sessions, setupToken)
 	s.mu.Unlock()
 }
 
@@ -140,33 +162,6 @@ func (s *Store) Len() int {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	return len(s.sessions)
-}
-
-// FindByRetrievalToken returns the session with the given retrieval token, or nil.
-func (s *Store) FindByRetrievalToken(token string) *Session {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-	for _, sess := range s.sessions {
-		if sess.RetrievalToken == token {
-			return sess
-		}
-	}
-	return nil
-}
-
-// PublicKeyHex returns the hex-encoded public key.
-func (sess *Session) PublicKeyHex() string {
-	return hex.EncodeToString(sess.PublicKey)
-}
-
-// PrivateKeyHex returns the hex-encoded private key.
-func (sess *Session) PrivateKeyHex() string {
-	return hex.EncodeToString(sess.PrivateKey)
-}
-
-// SSHToken returns the user:pass string suitable for Chisel auth.
-func (sess *Session) SSHToken() string {
-	return fmt.Sprintf("%s:%s", sess.Subdomain, sess.Token)
 }
 
 // Expired returns all sessions created before the given cutoff time.
@@ -194,13 +189,6 @@ func Nonce() (string, error) {
 // VerifySignature checks whether sig is a valid Ed25519 signature for msg.
 func VerifySignature(pub ed25519.PublicKey, msg, sig []byte) bool {
 	return ed25519.Verify(pub, msg, sig)
-}
-
-// SSHFingerprint returns the SHA256 fingerprint used by Chisel for host key verification.
-func SSHFingerprint(pub ed25519.PublicKey) string {
-	// Chisel uses ssh.PublicKey fingerprinting internally, but for our
-	// ephemeral keys we just return the base64-encoded raw key.
-	return base64.StdEncoding.EncodeToString(pub)
 }
 
 func randHex(n int) (string, error) {

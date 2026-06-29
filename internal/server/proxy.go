@@ -68,6 +68,9 @@ func (f *Frontend) proxyWebSocket(w http.ResponseWriter, r *http.Request) {
 		header.Set("Sec-Websocket-Protocol", proto)
 	}
 
+	// Preserve the original Host so the backend sees the public domain, not "localhost".
+	header.Set("Host", r.Host)
+
 	backendURL := fmt.Sprintf("ws://localhost%s", r.URL.RequestURI())
 	backendConn, resp, err := dialer.Dial(backendURL, header)
 	if err != nil {
@@ -103,7 +106,13 @@ func (f *Frontend) proxyWebSocket(w http.ResponseWriter, r *http.Request) {
 			return host == f.cfg.Domain || strings.HasSuffix(host, "."+f.cfg.Domain)
 		},
 	}
-	clientConn, err := upgrader.Upgrade(w, r, nil)
+
+	// Forward the subprotocol selected by the backend to the client.
+	respHeader := http.Header{}
+	if resp != nil && resp.Header.Get("Sec-Websocket-Protocol") != "" {
+		respHeader.Set("Sec-Websocket-Protocol", resp.Header.Get("Sec-Websocket-Protocol"))
+	}
+	clientConn, err := upgrader.Upgrade(w, r, respHeader)
 	if err != nil {
 		return
 	}
