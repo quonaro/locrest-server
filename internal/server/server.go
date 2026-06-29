@@ -24,6 +24,61 @@ var (
 	portsPathRegex = regexp.MustCompile(`^/(\d+)/(\d+)$`)
 )
 
+// rateLimiter is an in-memory sliding-window rate limiter per IP.
+type rateLimiter struct {
+	mu      sync.Mutex
+	windows map[string][]time.Time // IP -> request timestamps
+	limit   int
+	window  time.Duration
+}
+
+func newRateLimiter(limit int, window time.Duration) *rateLimiter {
+	return &rateLimiter{
+		windows: make(map[string][]time.Time),
+		limit:   limit,
+		window:  window,
+	}
+}
+
+func (rl *rateLimiter) allow(ip string) bool {
+	rl.mu.Lock()
+	defer rl.mu.Unlock()
+	now := time.Now()
+	cutoff := now.Add(-rl.window)
+	// drop old entries
+	recent := make([]time.Time, 0, len(rl.windows[ip]))
+	for _, t := range rl.windows[ip] {
+		if t.After(cutoff) {
+			recent = append(recent, t)
+		}
+	}
+	if len(recent) >= rl.limit {
+		rl.windows[ip] = recent
+		return false
+	}
+	rl.windows[ip] = append(recent, now)
+	return true
+}
+
+func (rl *rateLimiter) cleanup() {
+	rl.mu.Lock()
+	defer rl.mu.Unlock()
+	cutoff := time.Now().Add(-rl.window)
+	for ip, times := range rl.windows {
+		recent := make([]time.Time, 0, len(times))
+		for _, t := range times {
+			if t.After(cutoff) {
+				recent = append(recent, t)
+			}
+		}
+		if len(recent) == 0 {
+			delete(rl.windows, ip)
+		} else {
+			rl.windows[ip] = recent
+		}
+	}
+}
+
 // Frontend is the public HTTP/HTTPS server that dispenses scripts,
 // handles challenge-response, and reverse-proxies traffic into active tunnels.
 type Frontend struct {
@@ -32,17 +87,19 @@ type Frontend struct {
 	chisel *chiselwrapper.Chisel
 	mu     sync.RWMutex
 	// subdomain -> backend port
-	routes   map[string]int
-	nextPort atomic.Uint32
+	routes      map[string]int
+	nextPort    atomic.Uint32
+	rateLimiter *rateLimiter
 }
 
 // NewFrontend creates the HTTP frontend.
 func NewFrontend(cfg *config.ServerConfig, store *auth.Store, chisel *chiselwrapper.Chisel) *Frontend {
 	return &Frontend{
-		cfg:    cfg,
-		store:  store,
-		chisel: chisel,
-		routes: make(map[string]int),
+		cfg:         cfg,
+		store:       store,
+		chisel:      chisel,
+		routes:      make(map[string]int),
+		rateLimiter: newRateLimiter(10, time.Minute),
 	}
 }
 
@@ -150,27 +207,41 @@ func (f *Frontend) startCleaner(ctx context.Context) {
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
+			// Collect stale routes and expired sessions while holding the lock.
+			var staleRoutes []string
+			var expiredSessions []string
 			f.mu.Lock()
 			for subdomain, port := range f.routes {
 				if tunnel.GetProxyPipe(port) == nil {
-					slog.Debug("cleaner: removing stale route", "subdomain", subdomain, "port", port)
-					f.chisel.DeleteUser(subdomain)
+					staleRoutes = append(staleRoutes, subdomain)
 					delete(f.routes, subdomain)
 				}
 			}
-
 			if f.cfg.TTL > 0 {
 				now := time.Now()
 				for _, sess := range f.store.All() {
 					if now.After(sess.ExpiresAt) {
-						slog.Info("cleaner: deleting expired session", "subdomain", sess.Subdomain, "setup_token_prefix", sess.SetupToken[:8], "ttl", f.cfg.TTL)
-						f.chisel.DeleteUser(sess.Subdomain)
+						expiredSessions = append(expiredSessions, sess.SetupToken)
 						delete(f.routes, sess.Subdomain)
-						f.store.Delete(sess.SetupToken)
 					}
 				}
 			}
 			f.mu.Unlock()
+
+			// Perform I/O outside the lock.
+			for _, subdomain := range staleRoutes {
+				slog.Debug("cleaner: removing stale route", "subdomain", subdomain)
+				f.chisel.DeleteUser(subdomain)
+			}
+			for _, setupToken := range expiredSessions {
+				sess, ok := f.store.Get(setupToken)
+				if ok {
+					slog.Info("cleaner: deleting expired session", "subdomain", sess.Subdomain, "setup_token_prefix", sess.SetupToken[:8], "ttl", f.cfg.TTL)
+				}
+				f.store.Delete(setupToken)
+			}
+
+			f.rateLimiter.cleanup()
 		}
 	}
 }

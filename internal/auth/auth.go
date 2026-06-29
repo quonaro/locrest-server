@@ -61,16 +61,21 @@ func (sess *Session) IsActivated() bool {
 	return sess.Activated
 }
 
-// Store is an in-memory session map keyed by setup token.
+// Store is an in-memory session map keyed by setup token, with secondary indexes
+// for fast pubkey and subdomain lookups.
 type Store struct {
-	mu       sync.RWMutex
-	sessions map[string]*Session // keyed by setup token
+	mu          sync.RWMutex
+	sessions    map[string]*Session // keyed by setup token
+	byPubkey    map[string]*Session // keyed by hex-encoded pubkey
+	bySubdomain map[string]*Session // keyed by subdomain
 }
 
 // NewStore creates a session store.
 func NewStore() *Store {
 	return &Store{
-		sessions: make(map[string]*Session),
+		sessions:    make(map[string]*Session),
+		byPubkey:    make(map[string]*Session),
+		bySubdomain: make(map[string]*Session),
 	}
 }
 
@@ -99,6 +104,7 @@ func (s *Store) Create(subdomain string, localPort, serverPort int, targetHost s
 	}
 	s.mu.Lock()
 	s.sessions[setup] = sess
+	s.bySubdomain[subdomain] = sess
 	s.mu.Unlock()
 	return sess, nil
 }
@@ -115,24 +121,16 @@ func (s *Store) Get(setupToken string) (*Session, bool) {
 func (s *Store) GetByPubkey(pubHex string) (*Session, bool) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	for _, sess := range s.sessions {
-		if hex.EncodeToString(sess.PubKey) == pubHex {
-			return sess, true
-		}
-	}
-	return nil, false
+	sess, ok := s.byPubkey[pubHex]
+	return sess, ok
 }
 
 // GetBySubdomain finds a session by its subdomain.
 func (s *Store) GetBySubdomain(subdomain string) (*Session, bool) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	for _, sess := range s.sessions {
-		if sess.Subdomain == subdomain {
-			return sess, true
-		}
-	}
-	return nil, false
+	sess, ok := s.bySubdomain[subdomain]
+	return sess, ok
 }
 
 // RegisterPubkey links a public key to a pending session.
@@ -149,13 +147,21 @@ func (s *Store) RegisterPubkey(setupToken, pubHex string) bool {
 		return false
 	}
 	sess.PubKey = b
+	s.byPubkey[pubHex] = sess
 	return true
 }
 
-// Delete removes a session.
+// Delete removes a session and its indexes.
 func (s *Store) Delete(setupToken string) {
 	s.mu.Lock()
-	delete(s.sessions, setupToken)
+	sess, ok := s.sessions[setupToken]
+	if ok {
+		delete(s.sessions, setupToken)
+		delete(s.bySubdomain, sess.Subdomain)
+		if len(sess.PubKey) > 0 {
+			delete(s.byPubkey, hex.EncodeToString(sess.PubKey))
+		}
+	}
 	s.mu.Unlock()
 }
 
@@ -163,12 +169,8 @@ func (s *Store) Delete(setupToken string) {
 func (s *Store) HasSubdomain(subdomain string) bool {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	for _, sess := range s.sessions {
-		if sess.Subdomain == subdomain {
-			return true
-		}
-	}
-	return false
+	_, ok := s.bySubdomain[subdomain]
+	return ok
 }
 
 // Len returns the number of active sessions.

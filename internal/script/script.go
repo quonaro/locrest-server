@@ -86,15 +86,38 @@ if [ "$ACTUAL" != "$EXPECTED" ]; then
   exit 1
 fi
 
-chmod +x "$TMP"
+# Install to a writable persistent location (handles noexec /tmp)
+CACHE_DIR="${HOME}/.cache/locrest"
+if [ ! -d "$CACHE_DIR" ]; then
+  mkdir -p "$CACHE_DIR"
+fi
+BIN="$CACHE_DIR/$BIN_NAME"
+cp "$TMP" "$BIN"
+chmod +x "$BIN"
 
-exec "$TMP" \
-  -server "{{.WSServerURL}}/tunnel" \
-  -port {{.LocalPort}} \
-  -subdomain "{{.Subdomain}}" \
-  -setup-token "{{.SetupToken}}" \
-  -token-ttl "{{.TokenTTL}}"{{if ne .TargetHost "localhost"}} \
-  -host "{{.TargetHost}}"{{end}}{{.ExtraFlags}}
+# Hide sensitive values from process listings
+export LOCREST_SUBDOMAIN="{{.Subdomain}}"
+export LOCREST_SETUP_TOKEN="{{.SetupToken}}"
+
+# Supervisor loop with exponential backoff
+BACKOFF=1
+MAX_BACKOFF=30
+while true; do
+  if "$BIN" \
+    -server "{{.WSServerURL}}/tunnel" \
+    -port {{.LocalPort}} \
+    -token-ttl "{{.TokenTTL}}"{{if ne .TargetHost "localhost"}} \
+    -host "{{.TargetHost}}"{{end}}{{.ExtraFlags}}; then
+    BACKOFF=1
+  else
+    echo "locrest-client exited ($?), restarting in ${BACKOFF}s..." >&2
+    sleep "$BACKOFF"
+    BACKOFF=$((BACKOFF * 2))
+    if [ "$BACKOFF" -gt "$MAX_BACKOFF" ]; then
+      BACKOFF=$MAX_BACKOFF
+    fi
+  fi
+done
 `))
 
 // Generate returns a rendered shell script for the given session.

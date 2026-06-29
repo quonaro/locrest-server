@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"net"
 	"net/http"
 	"strings"
 	"time"
@@ -16,7 +17,30 @@ import (
 
 const maxSessions = 10000
 
+func clientIP(r *http.Request) string {
+	ip := r.Header.Get("X-Forwarded-For")
+	if ip != "" {
+		parts := strings.Split(ip, ",")
+		if len(parts) > 0 {
+			return strings.TrimSpace(parts[0])
+		}
+	}
+	ip = r.Header.Get("X-Real-Ip")
+	if ip != "" {
+		return strings.TrimSpace(ip)
+	}
+	host, _, err := net.SplitHostPort(r.RemoteAddr)
+	if err == nil {
+		return host
+	}
+	return r.RemoteAddr
+}
+
 func (f *Frontend) handleScript(w http.ResponseWriter, r *http.Request, localPort, remotePort int, targetHost string) {
+	if !f.rateLimiter.allow(clientIP(r)) {
+		http.Error(w, "Rate limit exceeded", http.StatusTooManyRequests)
+		return
+	}
 	if f.store.Len() >= maxSessions {
 		http.Error(w, "Server busy", http.StatusServiceUnavailable)
 		return
