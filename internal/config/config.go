@@ -26,6 +26,7 @@ type Permissions struct {
 	SetTTL       bool          `yaml:"set_ttl"`
 	MaxTTL       time.Duration `yaml:"max_ttl"`
 	HTTPAuth     bool          `yaml:"http_auth"`
+	SetSubdomain bool          `yaml:"set_subdomain"`
 }
 
 // PermissionsConfig holds permissions for public and authenticated users.
@@ -74,6 +75,7 @@ func DefaultConfig() *ServerConfig {
 				SetTTL:       false,
 				MaxTTL:       30 * time.Minute,
 				HTTPAuth:     true,
+				SetSubdomain: false,
 			},
 			Auth: Permissions{
 				CreateTunnel: true,
@@ -81,6 +83,7 @@ func DefaultConfig() *ServerConfig {
 				SetTTL:       true,
 				MaxTTL:       7 * 24 * time.Hour,
 				HTTPAuth:     true,
+				SetSubdomain: true,
 			},
 		},
 	}

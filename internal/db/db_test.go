@@ -69,7 +69,7 @@ func TestSessionCRUD(t *testing.T) {
 	}
 	defer db.Close()
 
-	sess, err := db.CreateSession(8080, 30001, "localhost", time.Hour, 8, "http", "public", "")
+	sess, err := db.CreateSession(8080, 30001, "localhost", time.Hour, 8, "http", "public", "", "")
 	if err != nil {
 		t.Fatalf("create session: %v", err)
 	}

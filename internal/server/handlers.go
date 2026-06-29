@@ -67,6 +67,12 @@ func (f *Frontend) handleScript(w http.ResponseWriter, r *http.Request, localPor
 		return
 	}
 
+	requestedSubdomain := r.URL.Query().Get("subdomain")
+	if requestedSubdomain != "" && !perms.SetSubdomain {
+		http.Error(w, "Permission DENIED", http.StatusForbidden)
+		return
+	}
+
 	rolePublic := role == "public"
 	ttl, err := effectiveTTL(r, f.cfg, rolePublic)
 	if err != nil {
@@ -82,9 +88,16 @@ func (f *Frontend) handleScript(w http.ResponseWriter, r *http.Request, localPor
 		return
 	}
 
-	sess, err := f.store.Create(localPort, serverPort, targetHost, ttl, 16, mode, role, httpAuth)
+	sess, err := f.store.Create(localPort, serverPort, targetHost, ttl, 16, mode, role, httpAuth, requestedSubdomain)
 	if err != nil {
-		http.Error(w, "Failed to create session", http.StatusInternalServerError)
+		msg := err.Error()
+		status := http.StatusInternalServerError
+		if msg == "subdomain already in use" {
+			status = http.StatusConflict
+		} else if strings.Contains(msg, "subdomain must") || strings.Contains(msg, "subdomain must not") {
+			status = http.StatusBadRequest
+		}
+		http.Error(w, msg, status)
 		return
 	}
 
@@ -106,7 +119,11 @@ func (f *Frontend) handleScript(w http.ResponseWriter, r *http.Request, localPor
 	flags := map[string]string{
 		"debug": r.URL.Query().Get("debug"),
 	}
-	scr, err := script.Generate(serverURL, f.cfg.BinaryURL, sess, r.UserAgent(), flags, ttl)
+	binaryURL := f.cfg.BinaryURL
+	if f.cfg.Dev {
+		binaryURL = ""
+	}
+	scr, err := script.Generate(serverURL, binaryURL, sess, r.UserAgent(), flags, ttl)
 	if err != nil {
 		http.Error(w, "Script generation failed", http.StatusInternalServerError)
 		return

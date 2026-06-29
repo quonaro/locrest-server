@@ -34,6 +34,13 @@
       "default_public": true,
       "default_auth": true,
       "description": "Whether the role is allowed to request HTTP Basic Auth protection via ?http_auth= query parameter."
+    },
+    "set_subdomain": {
+      "type": "boolean",
+      "applies_to": ["public", "auth"],
+      "default_public": false,
+      "default_auth": true,
+      "description": "Whether the role can request a custom subdomain via ?subdomain= query parameter."
     }
   }
 }

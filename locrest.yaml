@@ -9,5 +9,6 @@ server:
   permissions:
     public:
       raw_tcp: true
+      set_subdomain: true
   tls:
     email: "admin@loc.rest"
