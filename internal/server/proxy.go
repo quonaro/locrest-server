@@ -7,6 +7,7 @@ import (
 	"net"
 	"net/http"
 	"net/http/httputil"
+	"net/url"
 	"strings"
 	"sync"
 
@@ -23,15 +24,13 @@ func (f *Frontend) proxyWebSocket(w http.ResponseWriter, r *http.Request) {
 
 	f.mu.RLock()
 	backendPort, ok := f.routes[host]
-	f.mu.RUnlock()
 	if !ok {
 		parts := strings.SplitN(host, ".", 2)
 		if len(parts) == 2 {
-			f.mu.RLock()
 			backendPort, ok = f.routes[parts[0]]
-			f.mu.RUnlock()
 		}
 	}
+	f.mu.RUnlock()
 	if !ok {
 		http.Error(w, "No active tunnel for this host", http.StatusNotFound)
 		return
@@ -72,6 +71,10 @@ func (f *Frontend) proxyWebSocket(w http.ResponseWriter, r *http.Request) {
 	backendURL := fmt.Sprintf("ws://localhost%s", r.URL.RequestURI())
 	backendConn, resp, err := dialer.Dial(backendURL, header)
 	if err != nil {
+		if strings.Contains(err.Error(), "tunnel pipe full") {
+			http.Error(w, "Tunnel overloaded", http.StatusServiceUnavailable)
+			return
+		}
 		if resp != nil {
 			w.WriteHeader(resp.StatusCode)
 			io.Copy(w, resp.Body)
@@ -83,7 +86,23 @@ func (f *Frontend) proxyWebSocket(w http.ResponseWriter, r *http.Request) {
 	}
 	defer backendConn.Close()
 
-	upgrader := websocket.Upgrader{CheckOrigin: func(r *http.Request) bool { return true }}
+	upgrader := websocket.Upgrader{
+		CheckOrigin: func(r *http.Request) bool {
+			origin := r.Header.Get("Origin")
+			if origin == "" {
+				return true
+			}
+			u, err := url.Parse(origin)
+			if err != nil {
+				return false
+			}
+			host := u.Host
+			if colonIdx := strings.LastIndex(host, ":"); colonIdx != -1 {
+				host = host[:colonIdx]
+			}
+			return host == f.cfg.Domain || strings.HasSuffix(host, "."+f.cfg.Domain)
+		},
+	}
 	clientConn, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
 		return
@@ -129,15 +148,13 @@ func (f *Frontend) proxyTunnel(w http.ResponseWriter, r *http.Request) {
 
 	f.mu.RLock()
 	backendPort, ok := f.routes[host]
-	f.mu.RUnlock()
 	if !ok {
 		parts := strings.SplitN(host, ".", 2)
 		if len(parts) == 2 {
-			f.mu.RLock()
 			backendPort, ok = f.routes[parts[0]]
-			f.mu.RUnlock()
 		}
 	}
+	f.mu.RUnlock()
 	if !ok {
 		http.Error(w, "No active tunnel for this host", http.StatusNotFound)
 		return
@@ -167,6 +184,13 @@ func (f *Frontend) proxyTunnel(w http.ResponseWriter, r *http.Request) {
 			req.URL.Host = r.Host
 		},
 		Transport: tr,
+		ErrorHandler: func(w http.ResponseWriter, r *http.Request, err error) {
+			if strings.Contains(err.Error(), "tunnel pipe full") {
+				http.Error(w, "Tunnel overloaded", http.StatusServiceUnavailable)
+				return
+			}
+			http.Error(w, "backend unavailable", http.StatusBadGateway)
+		},
 	}
 	proxy.ServeHTTP(w, r)
 }

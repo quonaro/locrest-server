@@ -12,14 +12,53 @@ import (
 
 // Session holds the per-script ephemeral keypair and allocated port.
 type Session struct {
-	PrivateKey ed25519.PrivateKey
-	PublicKey  ed25519.PublicKey
-	Subdomain  string
-	LocalPort  int
-	ServerPort int
-	TargetHost string
-	Token      string
-	CreatedAt  time.Time
+	mu             sync.Mutex
+	PrivateKey     ed25519.PrivateKey
+	PublicKey      ed25519.PublicKey
+	Subdomain      string
+	LocalPort      int
+	ServerPort     int
+	TargetHost     string
+	Token          string
+	RetrievalToken string
+	CreatedAt      time.Time
+	Nonce          string
+	NonceAt        time.Time
+	Activated      bool
+}
+
+// SetNonce stores a fresh nonce and its timestamp under lock.
+func (sess *Session) SetNonce(nonce string) {
+	sess.mu.Lock()
+	sess.Nonce = nonce
+	sess.NonceAt = time.Now()
+	sess.mu.Unlock()
+}
+
+// ConsumeNonce validates the given nonce, ensures it has not expired,
+// and clears it so it cannot be reused. It returns true if the nonce is valid.
+func (sess *Session) ConsumeNonce(nonce string, ttl time.Duration) bool {
+	sess.mu.Lock()
+	defer sess.mu.Unlock()
+	if sess.Nonce == "" || sess.Nonce != nonce || time.Since(sess.NonceAt) > ttl {
+		return false
+	}
+	sess.Nonce = ""
+	return true
+}
+
+// Activate marks the session as activated (used). Safe for concurrent use.
+func (sess *Session) Activate() {
+	sess.mu.Lock()
+	sess.Activated = true
+	sess.mu.Unlock()
+}
+
+// IsActivated reports whether the session has already been activated.
+func (sess *Session) IsActivated() bool {
+	sess.mu.Lock()
+	defer sess.mu.Unlock()
+	return sess.Activated
 }
 
 // Store is an in-memory session map.
@@ -44,15 +83,24 @@ func (s *Store) Create(subdomain string, localPort, serverPort int, targetHost s
 	if err != nil {
 		return nil, fmt.Errorf("generate key: %w", err)
 	}
+	token, err := randHex(32)
+	if err != nil {
+		return nil, fmt.Errorf("generate token: %w", err)
+	}
+	retrieval, err := randHex(32)
+	if err != nil {
+		return nil, fmt.Errorf("generate retrieval token: %w", err)
+	}
 	sess := &Session{
-		PrivateKey: priv,
-		PublicKey:  priv.Public().(ed25519.PublicKey),
-		Subdomain:  subdomain,
-		LocalPort:  localPort,
-		ServerPort: serverPort,
-		TargetHost: targetHost,
-		Token:      randHex(32),
-		CreatedAt:  time.Now(),
+		PrivateKey:     priv,
+		PublicKey:      priv.Public().(ed25519.PublicKey),
+		Subdomain:      subdomain,
+		LocalPort:      localPort,
+		ServerPort:     serverPort,
+		TargetHost:     targetHost,
+		Token:          token,
+		RetrievalToken: retrieval,
+		CreatedAt:      time.Now(),
 	}
 	s.mu.Lock()
 	s.sessions[sess.PublicKeyHex()] = sess
@@ -73,6 +121,37 @@ func (s *Store) Delete(pubHex string) {
 	s.mu.Lock()
 	delete(s.sessions, pubHex)
 	s.mu.Unlock()
+}
+
+// HasSubdomain reports whether any existing session uses the given subdomain.
+func (s *Store) HasSubdomain(subdomain string) bool {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	for _, sess := range s.sessions {
+		if sess.Subdomain == subdomain {
+			return true
+		}
+	}
+	return false
+}
+
+// Len returns the number of active sessions.
+func (s *Store) Len() int {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return len(s.sessions)
+}
+
+// FindByRetrievalToken returns the session with the given retrieval token, or nil.
+func (s *Store) FindByRetrievalToken(token string) *Session {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	for _, sess := range s.sessions {
+		if sess.RetrievalToken == token {
+			return sess
+		}
+	}
+	return nil
 }
 
 // PublicKeyHex returns the hex-encoded public key.
@@ -124,19 +203,31 @@ func SSHFingerprint(pub ed25519.PublicKey) string {
 	return base64.StdEncoding.EncodeToString(pub)
 }
 
-func randHex(n int) string {
+func randHex(n int) (string, error) {
 	b := make([]byte, n)
-	rand.Read(b)
-	return hex.EncodeToString(b)
+	if _, err := rand.Read(b); err != nil {
+		return "", err
+	}
+	return hex.EncodeToString(b), nil
 }
 
-// RandString returns a random alphanumeric string of length n.
-func RandString(n int) string {
+// RandString returns a uniformly random alphanumeric string of length n.
+func RandString(n int) (string, error) {
 	const letters = "abcdefghijklmnopqrstuvwxyz0123456789"
 	b := make([]byte, n)
-	rand.Read(b)
+	reject := 256 - 256%len(letters)
 	for i := range b {
-		b[i] = letters[int(b[i])%len(letters)]
+		for {
+			var buf [1]byte
+			if _, err := rand.Read(buf[:]); err != nil {
+				return "", err
+			}
+			v := int(buf[0])
+			if v < reject {
+				b[i] = letters[v%len(letters)]
+				break
+			}
+		}
 	}
-	return string(b)
+	return string(b), nil
 }

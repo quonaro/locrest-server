@@ -9,6 +9,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"locrest-server/internal/auth"
@@ -31,7 +32,8 @@ type Frontend struct {
 	chisel *chiselwrapper.Chisel
 	mu     sync.RWMutex
 	// subdomain -> backend port
-	routes map[string]int
+	routes   map[string]int
+	nextPort atomic.Uint32
 }
 
 // NewFrontend creates the HTTP frontend.
@@ -44,12 +46,29 @@ func NewFrontend(cfg *config.ServerConfig, store *auth.Store, chisel *chiselwrap
 	}
 }
 
+// NextServerPort returns a unique internal port number for reverse-tunnel allocation.
+func (f *Frontend) NextServerPort() int {
+	return int(f.nextPort.Add(1)%40000 + 20000)
+}
+
+func securityHeaders(next http.Handler, tls bool) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("X-Content-Type-Options", "nosniff")
+		w.Header().Set("X-Frame-Options", "DENY")
+		if tls {
+			w.Header().Set("Strict-Transport-Security", "max-age=31536000; includeSubDomains")
+		}
+		next.ServeHTTP(w, r)
+	})
+}
+
 // Run starts the HTTP/HTTPS frontend and blocks.
 func (f *Frontend) Run(ctx context.Context) error {
 	mux := http.NewServeMux()
 	mux.Handle("/tunnel", f.chisel.Handler())
 	mux.Handle("/tunnel/", f.chisel.Handler())
 	mux.HandleFunc("/bin/", embedbin.ServeBinary)
+	mux.HandleFunc("/key/", f.handleKey)
 	mux.HandleFunc("/", f.handler)
 
 	tlsConfig, err := f.buildTLSConfig()
@@ -58,15 +77,17 @@ func (f *Frontend) Run(ctx context.Context) error {
 	}
 	tlsEnabled := tlsConfig != nil
 
+	handler := securityHeaders(mux, tlsEnabled)
+
 	primary := &http.Server{
 		Addr:      fmt.Sprintf(":%d", f.cfg.Port),
-		Handler:   mux,
+		Handler:   handler,
 		TLSConfig: tlsConfig,
 	}
 
 	var insecureSrv *http.Server
 	if tlsEnabled && f.cfg.Insecure {
-		insecureSrv = &http.Server{Addr: ":80", Handler: mux}
+		insecureSrv = &http.Server{Addr: ":80", Handler: handler}
 	}
 
 	go f.startCleaner(ctx)
@@ -94,7 +115,9 @@ func (f *Frontend) Run(ctx context.Context) error {
 		shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
 		if insecureSrv != nil {
-			insecureSrv.Shutdown(shutdownCtx)
+			if err := insecureSrv.Shutdown(shutdownCtx); err != nil {
+				slog.Error("insecure server shutdown failed", "error", err)
+			}
 		}
 		if err := primary.Shutdown(shutdownCtx); err != nil {
 			return err
@@ -134,17 +157,17 @@ func (f *Frontend) startCleaner(ctx context.Context) {
 					delete(f.routes, subdomain)
 				}
 			}
-			f.mu.Unlock()
 
 			if f.cfg.ScriptTTL > 0 {
 				cutoff := time.Now().Add(-f.cfg.ScriptTTL)
 				for _, sess := range f.store.Expired(cutoff) {
 					user, _, _ := strings.Cut(sess.SSHToken(), ":")
 					f.chisel.DeleteUser(user)
-					f.UnregisterRoute(sess.Subdomain)
+					delete(f.routes, sess.Subdomain)
 					f.store.Delete(sess.PublicKeyHex())
 				}
 			}
+			f.mu.Unlock()
 		}
 	}
 }

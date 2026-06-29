@@ -25,15 +25,15 @@ func DetectOS(ua string) string {
 
 // Params contains everything needed to render the one-liner script.
 type Params struct {
-	ServerURL   string
-	WSServerURL string
-	Subdomain   string
-	LocalPort   int
-	TargetHost  string
-	PrivateKey  string
-	OS          string
-	BinaryName  string
-	ExtraFlags  string
+	ServerURL      string
+	WSServerURL    string
+	Subdomain      string
+	LocalPort      int
+	TargetHost     string
+	RetrievalToken string
+	OS             string
+	BinaryName     string
+	ExtraFlags     string
 }
 
 func wsURL(httpURL string) string {
@@ -44,6 +44,18 @@ func wsURL(httpURL string) string {
 		return "ws://" + strings.TrimPrefix(httpURL, "http://")
 	}
 	return httpURL
+}
+
+func shellEscape(s string) string {
+	var b strings.Builder
+	for _, r := range s {
+		switch r {
+		case '"', '$', '`', '\\':
+			b.WriteByte('\\')
+		}
+		b.WriteRune(r)
+	}
+	return b.String()
 }
 
 var scriptTemplate = template.Must(template.New("install").Parse(`#!/bin/sh
@@ -59,15 +71,20 @@ esac
 
 URL="{{.ServerURL}}/bin/locrest-client-${OS}-${ARCH}"
 TMP=$(mktemp)
-trap "rm -f $TMP" EXIT
+KEYFILE=$(mktemp)
+trap 'rm -f "$TMP" "$KEYFILE"' EXIT
 
 curl -fsSL -o "$TMP" "$URL" || wget -q -O "$TMP" "$URL"
 chmod +x "$TMP"
+
+curl -fsSL "{{.ServerURL}}/key/{{.RetrievalToken}}" > "$KEYFILE"
+chmod 600 "$KEYFILE"
+
 exec "$TMP" \
   -server "{{.WSServerURL}}/tunnel" \
   -port {{.LocalPort}} \
   -subdomain "{{.Subdomain}}" \
-  -key "{{.PrivateKey}}"{{if ne .TargetHost "localhost"}} \
+  -keyfile "$KEYFILE"{{if ne .TargetHost "localhost"}} \
   -host "{{.TargetHost}}"{{end}}{{.ExtraFlags}}
 `))
 
@@ -80,15 +97,15 @@ func Generate(serverURL string, sess *auth.Session, ua string, flags map[string]
 		extra = " -debug"
 	}
 	p := Params{
-		ServerURL:   serverURL,
-		WSServerURL: wsURL(serverURL),
-		Subdomain:   sess.Subdomain,
-		LocalPort:   sess.LocalPort,
-		TargetHost:  sess.TargetHost,
-		PrivateKey:  sess.PrivateKeyHex(),
-		OS:          os,
-		BinaryName:  "locrest-client",
-		ExtraFlags:  extra,
+		ServerURL:      shellEscape(serverURL),
+		WSServerURL:    shellEscape(wsURL(serverURL)),
+		Subdomain:      shellEscape(sess.Subdomain),
+		LocalPort:      sess.LocalPort,
+		TargetHost:     shellEscape(sess.TargetHost),
+		RetrievalToken: sess.RetrievalToken,
+		OS:             shellEscape(os),
+		BinaryName:     "locrest-client",
+		ExtraFlags:     extra,
 	}
 	var buf strings.Builder
 	if err := scriptTemplate.Execute(&buf, p); err != nil {
