@@ -57,6 +57,38 @@ func stripErrorParam(rawQuery string) string {
 	return q.Encode()
 }
 
+func ipAllowed(ip string, allowedIPs []string) bool {
+	if len(allowedIPs) == 0 {
+		return true
+	}
+	client := net.ParseIP(ip)
+	if client == nil {
+		return false
+	}
+	for _, cidr := range allowedIPs {
+		_, ipNet, err := net.ParseCIDR(cidr)
+		if err != nil {
+			continue
+		}
+		if ipNet.Contains(client) {
+			return true
+		}
+	}
+	return false
+}
+
+func (f *Frontend) checkAllowedIPs(w http.ResponseWriter, r *http.Request, subdomain string) bool {
+	sess, ok := f.store.GetBySubdomain(subdomain)
+	if !ok || len(sess.AllowedIPs) == 0 {
+		return true
+	}
+	if !ipAllowed(clientIP(r, f.cfg.BehindProxy), sess.AllowedIPs) {
+		f.sendHTMLError(w, r, http.StatusForbidden, "Forbidden", "Access from this IP is not allowed.")
+		return false
+	}
+	return true
+}
+
 func (f *Frontend) checkBasicAuth(w http.ResponseWriter, r *http.Request, subdomain string) bool {
 	sess, ok := f.store.GetBySubdomain(subdomain)
 	if !ok || sess.HTTPAuth == "" {
@@ -107,6 +139,9 @@ func (f *Frontend) proxyWebSocket(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if !f.checkBasicAuth(w, r, subdomain) {
+		return
+	}
+	if !f.checkAllowedIPs(w, r, subdomain) {
 		return
 	}
 
@@ -245,6 +280,9 @@ func (f *Frontend) proxyTunnel(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if !f.checkBasicAuth(w, r, subdomain) {
+		return
+	}
+	if !f.checkAllowedIPs(w, r, subdomain) {
 		return
 	}
 

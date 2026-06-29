@@ -21,12 +21,13 @@ type TLSConfig struct {
 
 // Permissions defines capabilities for a role (public or auth).
 type Permissions struct {
-	CreateTunnel bool          `yaml:"create_tunnel"`
-	RawTCP       bool          `yaml:"raw_tcp"`
-	SetTTL       bool          `yaml:"set_ttl"`
-	MaxTTL       time.Duration `yaml:"max_ttl"`
-	HTTPAuth     bool          `yaml:"http_auth"`
-	SetSubdomain bool          `yaml:"set_subdomain"`
+	CreateTunnel  bool          `yaml:"create_tunnel"`
+	RawTCP        bool          `yaml:"raw_tcp"`
+	SetTTL        bool          `yaml:"set_ttl"`
+	MaxTTL        time.Duration `yaml:"max_ttl"`
+	HTTPAuth      bool          `yaml:"http_auth"`
+	SetSubdomain  bool          `yaml:"set_subdomain"`
+	SetAllowedIPs bool          `yaml:"set_allowed_ips"`
 }
 
 // PermissionsConfig holds permissions for public and authenticated users.
@@ -78,12 +79,13 @@ func DefaultConfig() *ServerConfig {
 				SetSubdomain: false,
 			},
 			Auth: Permissions{
-				CreateTunnel: true,
-				RawTCP:       true,
-				SetTTL:       true,
-				MaxTTL:       7 * 24 * time.Hour,
-				HTTPAuth:     true,
-				SetSubdomain: true,
+				CreateTunnel:  true,
+				RawTCP:        true,
+				SetTTL:        true,
+				MaxTTL:        7 * 24 * time.Hour,
+				HTTPAuth:      true,
+				SetSubdomain:  true,
+				SetAllowedIPs: true,
 			},
 		},
 	}

@@ -69,7 +69,7 @@ func TestSessionCRUD(t *testing.T) {
 	}
 	defer db.Close()
 
-	sess, err := db.CreateSession(8080, 30001, "localhost", time.Hour, 8, "http", "public", "", "")
+	sess, err := db.CreateSession(8080, 30001, "localhost", time.Hour, 8, "http", "public", "", "", nil)
 	if err != nil {
 		t.Fatalf("create session: %v", err)
 	}
@@ -109,5 +109,35 @@ func TestSessionCRUD(t *testing.T) {
 	_, ok = db.GetSession(sess.SetupToken)
 	if ok {
 		t.Fatal("session should be deleted")
+	}
+}
+
+func TestSessionAllowedIPs(t *testing.T) {
+	path := "test_sessions_ips.db"
+	defer os.Remove(path)
+
+	db, err := Open(path)
+	if err != nil {
+		t.Fatalf("open db: %v", err)
+	}
+	defer db.Close()
+
+	ips := []string{"192.168.1.0/24", "127.0.0.1/32"}
+	sess, err := db.CreateSession(8080, 30001, "localhost", time.Hour, 8, "http", "public", "", "", ips)
+	if err != nil {
+		t.Fatalf("create session: %v", err)
+	}
+
+	got, ok := db.GetSession(sess.SetupToken)
+	if !ok {
+		t.Fatal("session not found")
+	}
+	if len(got.AllowedIPs) != len(ips) {
+		t.Fatalf("expected %d allowed IPs, got %d", len(ips), len(got.AllowedIPs))
+	}
+	for i := range ips {
+		if got.AllowedIPs[i] != ips[i] {
+			t.Fatalf("expected %q, got %q", ips[i], got.AllowedIPs[i])
+		}
 	}
 }

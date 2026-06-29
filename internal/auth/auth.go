@@ -24,8 +24,8 @@ func NewStore(d *db.DB) *Store {
 }
 
 // Create generates a new session with a unique subdomain, setup token and chisel token.
-func (s *Store) Create(localPort, serverPort int, targetHost string, ttl time.Duration, subdomainLen int, mode, role, httpAuth, preferredSubdomain string) (*Session, error) {
-	return s.db.CreateSession(localPort, serverPort, targetHost, ttl, subdomainLen, mode, role, httpAuth, preferredSubdomain)
+func (s *Store) Create(localPort, serverPort int, targetHost string, ttl time.Duration, subdomainLen int, mode, role, httpAuth, preferredSubdomain string, allowedIPs []string) (*Session, error) {
+	return s.db.CreateSession(localPort, serverPort, targetHost, ttl, subdomainLen, mode, role, httpAuth, preferredSubdomain, allowedIPs)
 }
 
 // Get retrieves a session by setup token.

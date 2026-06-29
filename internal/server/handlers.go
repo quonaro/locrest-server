@@ -20,6 +20,34 @@ import (
 
 const maxSessions = 10000
 
+func parseAllowedIPs(raw string) ([]string, error) {
+	if raw == "" {
+		return nil, nil
+	}
+	parts := strings.Split(raw, ",")
+	out := make([]string, 0, len(parts))
+	for _, p := range parts {
+		p = strings.TrimSpace(p)
+		if p == "" {
+			continue
+		}
+		if strings.Contains(p, "/") {
+			_, _, err := net.ParseCIDR(p)
+			if err != nil {
+				return nil, fmt.Errorf("invalid CIDR %q", p)
+			}
+		} else {
+			ip := net.ParseIP(p)
+			if ip == nil {
+				return nil, fmt.Errorf("invalid IP %q", p)
+			}
+			p = p + "/32"
+		}
+		out = append(out, p)
+	}
+	return out, nil
+}
+
 func clientIP(r *http.Request, behindProxy bool) string {
 	if behindProxy {
 		ip := r.Header.Get("X-Forwarded-For")
@@ -73,6 +101,21 @@ func (f *Frontend) handleScript(w http.ResponseWriter, r *http.Request, localPor
 		return
 	}
 
+	allowedIPsRaw := r.URL.Query().Get("allowed_ips")
+	var allowedIPs []string
+	if allowedIPsRaw != "" {
+		if !perms.SetAllowedIPs {
+			http.Error(w, "Permission DENIED", http.StatusForbidden)
+			return
+		}
+		var err error
+		allowedIPs, err = parseAllowedIPs(allowedIPsRaw)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+	}
+
 	rolePublic := role == "public"
 	ttl, err := effectiveTTL(r, f.cfg, rolePublic)
 	if err != nil {
@@ -88,7 +131,7 @@ func (f *Frontend) handleScript(w http.ResponseWriter, r *http.Request, localPor
 		return
 	}
 
-	sess, err := f.store.Create(localPort, serverPort, targetHost, ttl, 16, mode, role, httpAuth, requestedSubdomain)
+	sess, err := f.store.Create(localPort, serverPort, targetHost, ttl, 16, mode, role, httpAuth, requestedSubdomain, allowedIPs)
 	if err != nil {
 		msg := err.Error()
 		status := http.StatusInternalServerError
