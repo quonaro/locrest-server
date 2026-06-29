@@ -1,5 +1,7 @@
 server:
   port: 80
   domain: "localtest.me"
+  dev: true
+  binary_url: "https://github.com/locrest/locrest/releases/latest/download"
   tls:
     email: "admin@loc.rest"

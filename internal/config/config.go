@@ -26,6 +26,8 @@ type ServerConfig struct {
 	TLS       TLSConfig     `yaml:"tls"`
 	ScriptTTL time.Duration `yaml:"script_ttl"`
 	Insecure  bool          `yaml:"insecure"`
+	Dev       bool          `yaml:"dev"`
+	BinaryURL string        `yaml:"binary_url"`
 }
 
 type yamlRoot struct {
@@ -38,6 +40,7 @@ func DefaultConfig() *ServerConfig {
 		Port:      80,
 		Domain:    "localtest.me",
 		ScriptTTL: 3 * time.Minute,
+		BinaryURL: "https://github.com/locrest/locrest/releases/latest/download",
 	}
 }
 
@@ -67,6 +70,8 @@ func Load(path string) (*ServerConfig, error) {
 	flag.StringVar(&cfg.TLS.Email, "tls-email", cfg.TLS.Email, "autocert contact email")
 	flag.DurationVar(&cfg.ScriptTTL, "script-ttl", cfg.ScriptTTL, "script/keypair TTL")
 	flag.BoolVar(&cfg.Insecure, "insecure", cfg.Insecure, "also listen on :80 without TLS when TLS is configured")
+	flag.BoolVar(&cfg.Dev, "dev", cfg.Dev, "serve embedded client binaries from embedbin/bin")
+	flag.StringVar(&cfg.BinaryURL, "binary-url", cfg.BinaryURL, "base URL for client binaries (used when dev=false)")
 	flag.Parse()
 
 	return cfg, nil

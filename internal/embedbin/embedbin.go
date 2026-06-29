@@ -77,11 +77,30 @@ func ServeChecksum(w http.ResponseWriter, r *http.Request) {
 	w.Write([]byte(sum))
 }
 
-// Handler routes /bin/ requests to either ServeBinary or ServeChecksum.
-func Handler(w http.ResponseWriter, r *http.Request) {
-	if strings.HasSuffix(r.URL.Path, ".sha256") {
-		ServeChecksum(w, r)
-	} else {
-		ServeBinary(w, r)
+// NewHandler returns an http.HandlerFunc that routes /bin/ requests.
+// When dev is false and binaryURL is non-empty, it redirects to the external URL.
+// Otherwise it serves embedded binaries directly.
+func NewHandler(dev bool, binaryURL string) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		fileName := path.Base(r.URL.Path)
+		if !strings.HasPrefix(fileName, "locrest-client-") {
+			http.NotFound(w, r)
+			return
+		}
+
+		if !dev && binaryURL != "" {
+			target := strings.TrimRight(binaryURL, "/") + "/" + fileName
+			http.Redirect(w, r, target, http.StatusTemporaryRedirect)
+			return
+		}
+
+		if strings.HasSuffix(r.URL.Path, ".sha256") {
+			ServeChecksum(w, r)
+		} else {
+			ServeBinary(w, r)
+		}
 	}
 }
+
+// Handler routes /bin/ requests to either ServeBinary or ServeChecksum.
+var Handler = NewHandler(true, "")
