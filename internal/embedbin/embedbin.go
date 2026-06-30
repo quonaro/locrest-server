@@ -12,7 +12,7 @@ import (
 	"strings"
 )
 
-//go:embed bin/*
+//go:embed bin
 var binFS embed.FS
 
 // staticFS is the filesystem used by the handlers. Tests may replace it with a directory FS.
