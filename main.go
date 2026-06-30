@@ -2,59 +2,48 @@ package main
 
 import (
 	"context"
-	"log/slog"
+	"errors"
+	"fmt"
 	"os"
-	"os/signal"
-	"syscall"
-	"time"
 
-	"locrest-server/internal/auth"
-	"locrest-server/internal/chiselwrapper"
-	"locrest-server/internal/config"
-	"locrest-server/internal/db"
-	"locrest-server/internal/server"
+	_ "embed"
+
+	"locrest-server/internal/cli"
+
+	"github.com/quonaro/lota/engine"
 )
 
+//go:embed cli.yml
+var cliYAML []byte
+
 func main() {
-	cfg, err := config.Load("locrest.yaml")
+	builder := engine.NewBuilder("locrest-server", cliYAML)
+	builder.RegisterNative("init", cli.InitConfig)
+	builder.RegisterNative("run", cli.RunServer)
+	builder.RegisterNative("add", cli.UserAdd)
+	builder.RegisterNative("delete", cli.UserDelete)
+	builder.RegisterNative("regenerate", cli.UserRegenerate)
+	builder.RegisterNative("show", cli.UserShow)
+	builder.RegisterNative("list", cli.UserList)
+
+	app, err := builder.Build()
 	if err != nil {
-		slog.Error("config load failed", "error", err)
+		fmt.Fprintf(os.Stderr, "config: %v\n", err)
 		os.Exit(1)
 	}
 
-	database, err := db.Open(cfg.DBPath)
-	if err != nil {
-		slog.Error("db open failed", "error", err)
-		os.Exit(1)
-	}
-	defer database.Close()
-
-	store := auth.NewStore(database)
-	chisel, err := chiselwrapper.New()
-	if err != nil {
-		slog.Error("chisel init failed", "error", err)
-		os.Exit(1)
+	if len(os.Args) < 2 {
+		app.PrintHelp()
+		return
 	}
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	database.StartCleaner(ctx, 30*time.Second)
-
-	frontend := server.NewFrontend(cfg, store, chisel, database)
-	frontend.ReloadChiselUsers()
-
-	sigCh := make(chan os.Signal, 1)
-	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
-	go func() {
-		<-sigCh
-		slog.Info("shutting down")
-		cancel()
-	}()
-
-	slog.Info("locrest-server starting", "http_port", cfg.HTTPPort, "https_port", cfg.HTTPSPort)
-	if err := frontend.Run(ctx); err != nil {
-		slog.Error("frontend run failed", "error", err)
+	if err := app.Run(context.Background(), os.Args[1:]); err != nil {
+		var groupErr *engine.GroupError
+		if errors.As(err, &groupErr) {
+			app.PrintGroupHelp(groupErr.Groups)
+			return
+		}
+		fmt.Fprintf(os.Stderr, "run: %v\n", err)
 		os.Exit(1)
 	}
 }

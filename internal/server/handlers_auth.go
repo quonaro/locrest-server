@@ -254,6 +254,7 @@ func (f *Frontend) handleVerify(w http.ResponseWriter, r *http.Request) {
 		"fingerprint": f.chisel.Fingerprint(),
 		"mode":        sess.Mode,
 		"http_auth":   sess.HTTPAuth,
+		"authorized":  sess.Role != "public",
 	}
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(resp)

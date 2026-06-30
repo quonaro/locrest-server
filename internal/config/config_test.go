@@ -1,16 +1,11 @@
 package config
 
 import (
-	"flag"
 	"os"
 	"path/filepath"
 	"testing"
 	"time"
 )
-
-func resetFlags() {
-	flag.CommandLine = flag.NewFlagSet(os.Args[0], flag.ExitOnError)
-}
 
 func TestDefaultConfig(t *testing.T) {
 	cfg := DefaultConfig()
@@ -56,7 +51,6 @@ func TestDefaultConfig(t *testing.T) {
 }
 
 func TestLoadFromYAML(t *testing.T) {
-	resetFlags()
 	oldArgs := os.Args
 	defer func() { os.Args = oldArgs }()
 	os.Args = []string{"test"}
@@ -98,7 +92,6 @@ func TestLoadFromYAML(t *testing.T) {
 }
 
 func TestLoadMissingFile(t *testing.T) {
-	resetFlags()
 	oldArgs := os.Args
 	defer func() { os.Args = oldArgs }()
 	os.Args = []string{"test"}
@@ -109,8 +102,7 @@ func TestLoadMissingFile(t *testing.T) {
 	}
 }
 
-func TestLoadCLIOverrides(t *testing.T) {
-	resetFlags()
+func TestLoadIgnoresCLIArgs(t *testing.T) {
 	oldArgs := os.Args
 	defer func() { os.Args = oldArgs }()
 	os.Args = []string{"test", "-http-port", "9090", "-domain", "cli.example.com", "-dev", "-log-level", "debug"}
@@ -129,16 +121,16 @@ func TestLoadCLIOverrides(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Load: %v", err)
 	}
-	if cfg.HTTPPort != 9090 {
-		t.Fatalf("HTTPPort = %d, want 9090", cfg.HTTPPort)
+	if cfg.HTTPPort != 8080 {
+		t.Fatalf("HTTPPort = %d, want 8080", cfg.HTTPPort)
 	}
-	if cfg.Domain != "cli.example.com" {
-		t.Fatalf("Domain = %q, want cli.example.com", cfg.Domain)
+	if cfg.Domain != "yaml.example.com" {
+		t.Fatalf("Domain = %q, want yaml.example.com", cfg.Domain)
 	}
-	if !cfg.Dev {
-		t.Fatal("Dev should be true")
+	if cfg.Dev {
+		t.Fatal("Dev should be false (default, not CLI-set)")
 	}
-	if cfg.LogLevel != "debug" {
-		t.Fatalf("LogLevel = %q, want debug", cfg.LogLevel)
+	if cfg.LogLevel != "info" {
+		t.Fatalf("LogLevel = %q, want info", cfg.LogLevel)
 	}
 }

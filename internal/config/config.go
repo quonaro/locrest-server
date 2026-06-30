@@ -1,7 +1,6 @@
 package config
 
 import (
-	"flag"
 	"fmt"
 	"os"
 	"time"
@@ -126,7 +125,7 @@ func DefaultConfig() *ServerConfig {
 	}
 }
 
-// Load reads a YAML file (nested under `server:`) and overrides with CLI flags.
+// Load reads a YAML file (nested under `server:`).
 func Load(path string) (*ServerConfig, error) {
 	cfg := DefaultConfig()
 
@@ -142,30 +141,6 @@ func Load(path string) (*ServerConfig, error) {
 		}
 		*cfg = root.Server
 	}
-
-	// CLI overrides
-	flag.StringVar(&cfg.Domain, "domain", cfg.Domain, "public domain")
-	flag.IntVar(&cfg.HTTPPort, "http-port", cfg.HTTPPort, "HTTP frontend port")
-	flag.IntVar(&cfg.HTTPSPort, "https-port", cfg.HTTPSPort, "HTTPS frontend port")
-	flag.StringVar(&cfg.TLS.Cert, "tls-cert", cfg.TLS.Cert, "TLS certificate path")
-	flag.StringVar(&cfg.TLS.Key, "tls-key", cfg.TLS.Key, "TLS private key path")
-	flag.BoolVar(&cfg.TLS.AutoTLS, "auto-tls", cfg.TLS.AutoTLS, "enable autocert (Let's Encrypt)")
-	flag.StringVar(&cfg.TLS.Email, "tls-email", cfg.TLS.Email, "autocert contact email")
-	flag.DurationVar(&cfg.TTL, "ttl", cfg.TTL, "default session lifetime")
-	flag.DurationVar(&cfg.TTLLimit, "ttl-limit", cfg.TTLLimit, "maximum allowed session lifetime")
-	flag.BoolVar(&cfg.Insecure, "insecure", cfg.Insecure, "also listen on :80 without TLS when TLS is configured")
-	flag.BoolVar(&cfg.Dev, "dev", cfg.Dev, "serve embedded client binaries from embedbin/bin")
-	flag.StringVar(&cfg.BinaryURL, "binary-url", cfg.BinaryURL, "base URL for client binaries (used when dev=false)")
-	flag.BoolVar(&cfg.StripErrorParam, "strip-error-param", cfg.StripErrorParam, "strip the 'error' query parameter before forwarding to backend")
-	flag.BoolVar(&cfg.BehindProxy, "behind-proxy", cfg.BehindProxy, "trust X-Forwarded-For and X-Real-Ip headers for client IP")
-	flag.StringVar(&cfg.DBPath, "db-path", cfg.DBPath, "path to BoltDB file")
-	flag.BoolVar(&cfg.RootPage, "root-page", cfg.RootPage, "serve landing page on root host")
-	flag.IntVar(&cfg.MaxSessions, "max-sessions", cfg.MaxSessions, "maximum number of concurrent sessions")
-	flag.IntVar(&cfg.SubdomainLength, "subdomain-length", cfg.SubdomainLength, "length of auto-generated subdomains")
-	flag.StringVar(&cfg.LogLevel, "log-level", cfg.LogLevel, "log level (debug, info, warn, error)")
-	flag.BoolVar(&cfg.StatusEndpoint, "status-endpoint", cfg.StatusEndpoint, "enable /status endpoint")
-	flag.BoolVar(&cfg.HTTPToHTTPSRedirect, "http-to-https-redirect", cfg.HTTPToHTTPSRedirect, "redirect HTTP to HTTPS when TLS is enabled")
-	flag.Parse()
 
 	return cfg, nil
 }

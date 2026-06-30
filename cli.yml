@@ -1,0 +1,39 @@
+init:
+  desc: Create a default locrest.yaml config file
+  color: green
+  native: true
+  args:
+  - "path:str=locrest.yaml"
+
+run:
+  desc: Run the locrest-server
+  color: magenta
+  native: true
+
+user:
+  desc: User management
+  color: cyan
+  inherit_color: true
+  add:
+    desc: Add a new user with generated token and seed phrase
+    native: true
+    args:
+    - "username:str"
+  delete:
+    desc: Delete a user
+    native: true
+    args:
+    - "username:str"
+  regenerate:
+    desc: Regenerate a user's API token
+    native: true
+    args:
+    - "username:str"
+  show:
+    desc: Show a user by username
+    native: true
+    args:
+    - "username:str"
+  list:
+    desc: List all users
+    native: true

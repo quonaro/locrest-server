@@ -12,17 +12,60 @@ import (
 
 // User represents an authorized user with an API token and seed phrase hash.
 type User struct {
-	Username      string    `json:"username"`
-	APIToken      string    `json:"api_token"`
-	SeedPhraseHash string   `json:"seed_phrase_hash"`
-	Expire        time.Time `json:"expire"`
-	CreatedAt     time.Time `json:"created_at"`
+	Username       string    `json:"username"`
+	APIToken       string    `json:"api_token"`
+	SeedPhraseHash string    `json:"seed_phrase_hash"`
+	Expire         time.Time `json:"expire"`
+	CreatedAt      time.Time `json:"created_at"`
 }
 
 // HashSeedPhrase computes SHA-256 of the plaintext seed phrase.
 func HashSeedPhrase(seed string) string {
 	h := sha256.Sum256([]byte(seed))
 	return hex.EncodeToString(h[:])
+}
+
+// GetUser looks up a user by username.
+func (d *DB) GetUser(username string) (*User, error) {
+	var user User
+	err := d.View(func(tx *bolt.Tx) error {
+		b := tx.Bucket([]byte(bucketUsers))
+		if b == nil {
+			return fmt.Errorf("users bucket missing")
+		}
+		data := b.Get([]byte(username))
+		if data == nil {
+			return fmt.Errorf("user not found")
+		}
+		return json.Unmarshal(data, &user)
+	})
+	if err != nil {
+		return nil, err
+	}
+	return &user, nil
+}
+
+// ListUsers returns all users ordered by username.
+func (d *DB) ListUsers() ([]*User, error) {
+	var users []*User
+	err := d.View(func(tx *bolt.Tx) error {
+		b := tx.Bucket([]byte(bucketUsers))
+		if b == nil {
+			return fmt.Errorf("users bucket missing")
+		}
+		return b.ForEach(func(k, v []byte) error {
+			var user User
+			if err := json.Unmarshal(v, &user); err != nil {
+				return err
+			}
+			users = append(users, &user)
+			return nil
+		})
+	})
+	if err != nil {
+		return nil, err
+	}
+	return users, nil
 }
 
 // CreateUser inserts a new user into the database.
