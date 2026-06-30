@@ -103,7 +103,7 @@ func (f *Frontend) Run(ctx context.Context) error {
 		}
 		if f.cfg.Insecure {
 			if f.cfg.HTTPToHTTPSRedirect {
-				insecureSrv = &http.Server{Addr: fmt.Sprintf(":%d", f.cfg.HTTPPort), Handler: redirectToHTTPS(handler, f.cfg.HTTPSPort)}
+				insecureSrv = &http.Server{Addr: fmt.Sprintf(":%d", f.cfg.HTTPPort), Handler: redirectToHTTPS(f.cfg.HTTPSPort)}
 			} else {
 				insecureSrv = &http.Server{Addr: fmt.Sprintf(":%d", f.cfg.HTTPPort), Handler: handler}
 			}
@@ -239,19 +239,20 @@ func (f *Frontend) ReloadChiselUsers() {
 			slog.Warn("reload chisel user failed", "subdomain", sess.Subdomain, "error", err)
 			continue
 		}
-		if sess.Mode == "http" {
+		switch sess.Mode {
+		case "http":
 			f.RegisterRoute(sess.Subdomain, sess.ServerPort)
-		} else if sess.Mode == "tcp" {
-			go func(port int, setupToken string) {
+		case "tcp":
+			go func(port int) {
 				for i := 0; i < 50; i++ {
 					if tunnel.GetProxyPipe(port) != nil {
-						f.startTCPListener(port, setupToken)
+						f.startTCPListener(port)
 						return
 					}
 					time.Sleep(100 * time.Millisecond)
 				}
 				slog.Warn("reload tcp: chisel pipe never created", "port", port)
-			}(sess.ServerPort, sess.SetupToken)
+			}(sess.ServerPort)
 		}
 		slog.Debug("reloaded chisel user", "subdomain", sess.Subdomain, "mode", sess.Mode)
 	}

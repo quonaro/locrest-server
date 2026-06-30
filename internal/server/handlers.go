@@ -99,7 +99,7 @@ func (f *Frontend) handleScript(w http.ResponseWriter, r *http.Request, localPor
 	}
 
 	rolePublic := role == "public"
-	ttl, err := effectiveTTL(r, f.cfg, rolePublic)
+	ttl, infinity, err := effectiveTTL(r, f.cfg, rolePublic)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
@@ -113,7 +113,7 @@ func (f *Frontend) handleScript(w http.ResponseWriter, r *http.Request, localPor
 		return
 	}
 
-	sess, err := f.store.Create(localPort, serverPort, targetHost, ttl, f.cfg.SubdomainLength, mode, role, httpAuth, requestedSubdomain, allowedIPs)
+	sess, err := f.store.Create(localPort, serverPort, targetHost, ttl, infinity, f.cfg.SubdomainLength, mode, role, httpAuth, requestedSubdomain, allowedIPs)
 	if err != nil {
 		msg := err.Error()
 		status := http.StatusInternalServerError
@@ -148,7 +148,7 @@ func (f *Frontend) handleScript(w http.ResponseWriter, r *http.Request, localPor
 	if f.cfg.Dev {
 		binaryURL = ""
 	}
-	scr, err := script.Generate(serverURL, binaryURL, sess, r.UserAgent(), flags, ttl)
+	scr, err := script.Generate(serverURL, binaryURL, sess, r.UserAgent(), flags, ttl, infinity)
 	if err != nil {
 		http.Error(w, "Script generation failed", http.StatusInternalServerError)
 		return

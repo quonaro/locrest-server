@@ -93,7 +93,7 @@ func ipFilterMiddleware(next http.Handler, allowed, blocked []string, behindProx
 	})
 }
 
-func redirectToHTTPS(next http.Handler, httpsPort int) http.Handler {
+func redirectToHTTPS(httpsPort int) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		target := fmt.Sprintf("https://%s%s", r.Host, r.URL.RequestURI())
 		if httpsPort != 443 {

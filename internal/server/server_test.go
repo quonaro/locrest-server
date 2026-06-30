@@ -156,10 +156,7 @@ func TestSecurityHeaders(t *testing.T) {
 }
 
 func TestRedirectToHTTPS(t *testing.T) {
-	next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		t.Fatal("should not call next")
-	})
-	h := redirectToHTTPS(next, 8443)
+	h := redirectToHTTPS(8443)
 	req := httptest.NewRequest(http.MethodGet, "/foo?bar=1", nil)
 	req.Host = "example.com:8080"
 	rec := httptest.NewRecorder()
@@ -174,8 +171,7 @@ func TestRedirectToHTTPS(t *testing.T) {
 }
 
 func TestRedirectToHTTPSDefaultPort(t *testing.T) {
-	next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {})
-	h := redirectToHTTPS(next, 443)
+	h := redirectToHTTPS(443)
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
 	req.Host = "example.com"
 	rec := httptest.NewRecorder()
@@ -254,7 +250,7 @@ func TestEffectiveTTL(t *testing.T) {
 	cfg.TTLLimit = 24 * time.Hour
 
 	req := httptest.NewRequest(http.MethodGet, "/?ttl=30m", nil)
-	ttl, err := effectiveTTL(req, cfg, false)
+	ttl, _, err := effectiveTTL(req, cfg, false)
 	if err != nil {
 		t.Fatalf("effectiveTTL: %v", err)
 	}
@@ -266,7 +262,7 @@ func TestEffectiveTTL(t *testing.T) {
 	cfg.Permissions.Public.SetTTL = false
 	cfg.Permissions.Public.MaxTTL = 5 * time.Minute
 	req2 := httptest.NewRequest(http.MethodGet, "/?ttl=30m", nil)
-	ttl2, err := effectiveTTL(req2, cfg, true)
+	ttl2, _, err := effectiveTTL(req2, cfg, true)
 	if err != nil {
 		t.Fatalf("effectiveTTL: %v", err)
 	}
@@ -275,8 +271,28 @@ func TestEffectiveTTL(t *testing.T) {
 	}
 
 	req3 := httptest.NewRequest(http.MethodGet, "/?ttl=bad", nil)
-	if _, err := effectiveTTL(req3, cfg, false); err == nil {
+	if _, _, err := effectiveTTL(req3, cfg, false); err == nil {
 		t.Fatal("expected error for invalid ttl")
+	}
+
+	// Auth user can request infinity.
+	req4 := httptest.NewRequest(http.MethodGet, "/?infinity=true", nil)
+	_, inf, err := effectiveTTL(req4, cfg, false)
+	if err != nil {
+		t.Fatalf("effectiveTTL: %v", err)
+	}
+	if !inf {
+		t.Fatal("expected infinity for auth user")
+	}
+
+	// Public user can also request infinity at parse time; actual enforcement is in activation.
+	req5 := httptest.NewRequest(http.MethodGet, "/?infinity=true", nil)
+	_, inf2, err := effectiveTTL(req5, cfg, true)
+	if err != nil {
+		t.Fatalf("effectiveTTL: %v", err)
+	}
+	if !inf2 {
+		t.Fatal("expected infinity flag for public request")
 	}
 }
 
@@ -306,7 +322,7 @@ func TestHandleScript(t *testing.T) {
 func TestHandleScriptMaxSessions(t *testing.T) {
 	f := newTestFrontend(t, nil)
 	f.cfg.MaxSessions = 1
-	if _, err := f.store.Create(8080, 30001, "localhost", time.Hour, 8, "http", "public", "", "", nil); err != nil {
+	if _, err := f.store.Create(8080, 30001, "localhost", time.Hour, false, 8, "http", "public", "", "", nil); err != nil {
 		t.Fatalf("create session: %v", err)
 	}
 	req := httptest.NewRequest(http.MethodGet, "/8080", nil)
@@ -322,7 +338,7 @@ func TestHandleChallengeAndVerify(t *testing.T) {
 	f := newTestFrontend(t, nil)
 
 	// Create a session and register a pubkey.
-	sess, err := f.store.Create(8080, 30001, "localhost", time.Hour, 8, "http", "public", "", "", nil)
+	sess, err := f.store.Create(8080, 30001, "localhost", time.Hour, false, 8, "http", "public", "", "", nil)
 	if err != nil {
 		t.Fatalf("create session: %v", err)
 	}
@@ -389,9 +405,60 @@ func TestHandleChallengeAndVerify(t *testing.T) {
 	}
 }
 
+func TestHandleVerifyInfinityDeniedForPublic(t *testing.T) {
+	f := newTestFrontend(t, nil)
+
+	// Create a public session with infinity=true as if handleScript accepted the flag.
+	sess, err := f.store.Create(8080, 30001, "localhost", 0, true, 8, "http", "public", "", "", nil)
+	if err != nil {
+		t.Fatalf("create session: %v", err)
+	}
+	pub, priv, err := ed25519.GenerateKey(nil)
+	if err != nil {
+		t.Fatalf("generate key: %v", err)
+	}
+	pubHex := fmt.Sprintf("%x", pub)
+	if !f.store.RegisterPubkey(sess.SetupToken, pubHex) {
+		t.Fatal("register pubkey failed")
+	}
+
+	chalReq := httptest.NewRequest(http.MethodGet, "/challenge?pubkey="+pubHex, nil)
+	chalRec := httptest.NewRecorder()
+	f.handleChallenge(chalRec, chalReq)
+	if chalRec.Code != http.StatusOK {
+		t.Fatalf("challenge status = %d: %s", chalRec.Code, chalRec.Body.String())
+	}
+	var chalResp struct {
+		Nonce string `json:"nonce"`
+	}
+	if err := json.Unmarshal(chalRec.Body.Bytes(), &chalResp); err != nil {
+		t.Fatalf("decode challenge: %v", err)
+	}
+
+	sig := ed25519.Sign(priv, []byte(chalResp.Nonce))
+	vBody, _ := json.Marshal(map[string]string{
+		"pubkey":    pubHex,
+		"signature": base64.StdEncoding.EncodeToString(sig),
+		"nonce":     chalResp.Nonce,
+		"subdomain": sess.Subdomain,
+	})
+	req := httptest.NewRequest(http.MethodPost, "/verify", bytes.NewReader(vBody))
+	rec := httptest.NewRecorder()
+	f.handleVerify(rec, req)
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("verify status = %d, want 403: %s", rec.Code, rec.Body.String())
+	}
+	if !strings.Contains(rec.Body.String(), "infinity tunnel not permitted") {
+		t.Fatalf("unexpected error body: %s", rec.Body.String())
+	}
+	if _, ok := f.db.GetSession(sess.SetupToken); ok {
+		t.Fatal("session should be deleted after denied activation")
+	}
+}
+
 func TestHandleVerifyReplayNonce(t *testing.T) {
 	f := newTestFrontend(t, nil)
-	sess, err := f.store.Create(8080, 30001, "localhost", time.Hour, 8, "http", "public", "", "", nil)
+	sess, err := f.store.Create(8080, 30001, "localhost", time.Hour, false, 8, "http", "public", "", "", nil)
 	if err != nil {
 		t.Fatalf("create session: %v", err)
 	}
@@ -439,7 +506,7 @@ func TestHandleVerifyReplayNonce(t *testing.T) {
 
 func TestHandleRegister(t *testing.T) {
 	f := newTestFrontend(t, nil)
-	sess, err := f.store.Create(8080, 30001, "localhost", time.Hour, 8, "http", "public", "", "", nil)
+	sess, err := f.store.Create(8080, 30001, "localhost", time.Hour, false, 8, "http", "public", "", "", nil)
 	if err != nil {
 		t.Fatalf("create session: %v", err)
 	}
@@ -507,7 +574,7 @@ func TestHandleRegenerate(t *testing.T) {
 
 func TestHandleStatus(t *testing.T) {
 	f := newTestFrontend(t, nil)
-	sess, err := f.store.Create(8080, 30001, "localhost", time.Hour, 8, "http", "public", "", "", nil)
+	sess, err := f.store.Create(8080, 30001, "localhost", time.Hour, false, 8, "http", "public", "", "", nil)
 	if err != nil {
 		t.Fatalf("create session: %v", err)
 	}
@@ -622,7 +689,7 @@ func TestSendJSONError(t *testing.T) {
 
 func TestCheckBasicAuth(t *testing.T) {
 	f := newTestFrontend(t, nil)
-	sess, err := f.store.Create(8080, 30001, "localhost", time.Hour, 8, "http", "public", "user:pass", "", nil)
+	sess, err := f.store.Create(8080, 30001, "localhost", time.Hour, false, 8, "http", "public", "user:pass", "", nil)
 	if err != nil {
 		t.Fatalf("create session: %v", err)
 	}
@@ -649,7 +716,7 @@ func TestCheckBasicAuth(t *testing.T) {
 
 func TestCheckAllowedIPs(t *testing.T) {
 	f := newTestFrontend(t, nil)
-	sess, err := f.store.Create(8080, 30001, "localhost", time.Hour, 8, "http", "public", "", "", []string{"192.168.1.0/24"})
+	sess, err := f.store.Create(8080, 30001, "localhost", time.Hour, false, 8, "http", "public", "", "", []string{"192.168.1.0/24"})
 	if err != nil {
 		t.Fatalf("create session: %v", err)
 	}
@@ -762,7 +829,7 @@ func TestHandlerStatusEndpointDisabled(t *testing.T) {
 
 func TestChallengeActivated(t *testing.T) {
 	f := newTestFrontend(t, nil)
-	sess, err := f.store.Create(3000, 0, "localhost", time.Hour, 8, "http", "public", "", "", nil)
+	sess, err := f.store.Create(3000, 0, "localhost", time.Hour, false, 8, "http", "public", "", "", nil)
 	if err != nil {
 		t.Fatalf("create session: %v", err)
 	}
@@ -789,7 +856,7 @@ func TestChallengeActivated(t *testing.T) {
 
 func TestBasicAuthCheck(t *testing.T) {
 	f := newTestFrontend(t, nil)
-	sess, err := f.store.Create(3000, 30001, "localhost", time.Hour, 8, "http", "public", "user:pass", "", nil)
+	sess, err := f.store.Create(3000, 30001, "localhost", time.Hour, false, 8, "http", "public", "user:pass", "", nil)
 	if err != nil {
 		t.Fatalf("create session: %v", err)
 	}
@@ -816,7 +883,7 @@ func TestBasicAuthCheck(t *testing.T) {
 
 func TestReloadChiselUsers(t *testing.T) {
 	f := newTestFrontend(t, nil)
-	sess, err := f.store.Create(3000, 30001, "localhost", time.Hour, 8, "http", "public", "", "", nil)
+	sess, err := f.store.Create(3000, 30001, "localhost", time.Hour, false, 8, "http", "public", "", "", nil)
 	if err != nil {
 		t.Fatalf("create session: %v", err)
 	}

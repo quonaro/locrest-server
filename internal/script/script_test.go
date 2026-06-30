@@ -71,7 +71,7 @@ func TestGenerate(t *testing.T) {
 		SetupToken: "setuptoken123",
 		HTTPAuth:   "user:pass",
 	}
-	scr, err := Generate("https://example.com", "https://cdn.example.com", sess, "curl/7.68.0", nil, time.Hour)
+	scr, err := Generate("https://example.com", "https://cdn.example.com", sess, "curl/7.68.0", nil, time.Hour, false)
 	if err != nil {
 		t.Fatalf("Generate: %v", err)
 	}
@@ -100,7 +100,7 @@ func TestGenerateDebugFlag(t *testing.T) {
 		TargetHost: "localhost",
 		SetupToken: "setuptoken123",
 	}
-	scr, err := Generate("https://example.com", "", sess, "wget/1.20.3", map[string]string{"debug": "true"}, time.Hour)
+	scr, err := Generate("https://example.com", "", sess, "wget/1.20.3", map[string]string{"debug": "true"}, time.Hour, false)
 	if err != nil {
 		t.Fatalf("Generate: %v", err)
 	}
@@ -120,12 +120,31 @@ func TestGenerateEscapes(t *testing.T) {
 		SetupToken: "token",
 		HTTPAuth:   "user:pass",
 	}
-	scr, err := Generate("https://example.com/path", "https://bin.example.com", sess, "", nil, 30*time.Minute)
+	scr, err := Generate("https://example.com/path", "https://bin.example.com", sess, "", nil, 30*time.Minute, false)
 	if err != nil {
 		t.Fatalf("Generate: %v", err)
 	}
 	// server URL should have trailing slash removed
 	if strings.Contains(scr, "https://example.com/path//") {
 		t.Fatal("trailing slash not trimmed")
+	}
+}
+
+func TestGenerateInfinity(t *testing.T) {
+	sess := &auth.Session{
+		Subdomain:  "infsub",
+		LocalPort:  8080,
+		TargetHost: "localhost",
+		SetupToken: "token",
+	}
+	scr, err := Generate("https://example.com", "", sess, "curl/7.68.0", nil, 0, true)
+	if err != nil {
+		t.Fatalf("Generate: %v", err)
+	}
+	if strings.Contains(scr, "-token-ttl") {
+		t.Fatal("infinite script should not contain token-ttl flag")
+	}
+	if !strings.Contains(scr, "infsub") {
+		t.Fatal("script missing subdomain")
 	}
 }

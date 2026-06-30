@@ -49,7 +49,7 @@ func (f *Frontend) cleanStaleRoutesAndSessions() {
 	if f.cfg.TTL > 0 {
 		now := time.Now()
 		for _, sess := range f.store.All() {
-			if now.After(sess.ExpiresAt) {
+			if !sess.Infinity && now.After(sess.ExpiresAt) {
 				expiredSessions = append(expiredSessions, sess.SetupToken)
 				delete(f.routes, sess.Subdomain)
 			}

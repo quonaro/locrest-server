@@ -37,6 +37,7 @@ type Permissions struct {
 	SetHost       bool          `yaml:"set_host"`
 	SetTCPPort    bool          `yaml:"set_tcp_port"`
 	SetMode       bool          `yaml:"set_mode"`
+	Infinity      bool          `yaml:"infinity"`
 }
 
 // PermissionsConfig holds permissions for public and authenticated users.
@@ -106,6 +107,7 @@ func DefaultConfig() *ServerConfig {
 				MaxTTL:       30 * time.Minute,
 				HTTPAuth:     true,
 				SetSubdomain: false,
+				Infinity:     false,
 			},
 			Auth: Permissions{
 				CreateTunnel:  true,
@@ -118,6 +120,7 @@ func DefaultConfig() *ServerConfig {
 				SetHost:       true,
 				SetTCPPort:    true,
 				SetMode:       true,
+				Infinity:      true,
 			},
 		},
 	}

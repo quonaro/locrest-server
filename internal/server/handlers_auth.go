@@ -215,6 +215,11 @@ func (f *Frontend) handleVerify(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Permission DENIED", http.StatusForbidden)
 		return
 	}
+	if sess.Infinity && !perms.Infinity {
+		f.store.Delete(sess.SetupToken)
+		http.Error(w, "infinity tunnel not permitted for your role", http.StatusForbidden)
+		return
+	}
 
 	if err := f.chisel.AddUser(sess.Subdomain, sess.Token); err != nil {
 		http.Error(w, "Failed to register user", http.StatusInternalServerError)
@@ -230,16 +235,16 @@ func (f *Frontend) handleVerify(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if sess.Mode == "tcp" {
-		go func(port int, setupToken string) {
+		go func(port int) {
 			for i := 0; i < 50; i++ {
 				if tunnel.GetProxyPipe(port) != nil {
-					f.startTCPListener(port, setupToken)
+					f.startTCPListener(port)
 					return
 				}
 				time.Sleep(100 * time.Millisecond)
 			}
 			slog.Warn("tcp raw: chisel pipe never created", "port", port)
-		}(sess.ServerPort, sess.SetupToken)
+		}(sess.ServerPort)
 	}
 
 	resp := map[string]interface{}{

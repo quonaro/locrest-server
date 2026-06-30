@@ -38,6 +38,7 @@ type Params struct {
 	BinaryName  string
 	ExtraFlags  string
 	HTTPAuth    string
+	Infinity    bool
 }
 
 func wsURL(httpURL string) string {
@@ -115,16 +116,17 @@ while true; do
   if "$BIN" \
     -server "{{.WSServerURL}}/tunnel" \
     -port {{.LocalPort}} \
-    -token-ttl "{{.TokenTTL}}"{{if ne .TargetHost "localhost"}} \
-    -host "{{.TargetHost}}"{{end}}{{.ExtraFlags}}; then
+{{if not .Infinity}}    -token-ttl "{{.TokenTTL}}" \
+{{end}}{{if ne .TargetHost "localhost"}}    -host "{{.TargetHost}}" \
+{{end}}{{if ne .ExtraFlags ""}}    {{.ExtraFlags}} \
+{{end}}; then
     BACKOFF=1
   else
     EXIT_CODE=$?
     if [ "$EXIT_CODE" -eq 2 ]; then
-      printf "${ORANGE}Exited (%d), session expired or invalid — not retrying${RESET}" "$EXIT_CODE" >&2
-      break
+      exit "$EXIT_CODE"
     fi
-    printf "${ORANGE}Exited (%d), retrying in %ds...${RESET}" "$EXIT_CODE" "$BACKOFF" >&2
+    printf "${ORANGE}Exited (%d), retrying in %ds...${RESET}\n" "$EXIT_CODE" "$BACKOFF" >&2
     sleep "$BACKOFF"
     BACKOFF=$((BACKOFF * 2))
     if [ "$BACKOFF" -gt "$MAX_BACKOFF" ]; then
@@ -135,7 +137,7 @@ done
 `))
 
 // Generate returns a rendered shell script for the given session.
-func Generate(serverURL, binaryURL string, sess *auth.Session, ua string, flags map[string]string, tokenTTL time.Duration) (string, error) {
+func Generate(serverURL, binaryURL string, sess *auth.Session, ua string, flags map[string]string, tokenTTL time.Duration, infinity bool) (string, error) {
 	if binaryURL == "" {
 		binaryURL = serverURL
 	}
@@ -143,7 +145,7 @@ func Generate(serverURL, binaryURL string, sess *auth.Session, ua string, flags 
 	serverURL = strings.TrimRight(serverURL, "/")
 	extra := ""
 	if flags["debug"] == "true" {
-		extra = " -debug"
+		extra = "-debug"
 	}
 	p := Params{
 		ServerURL:   shellEscape(serverURL),
@@ -158,6 +160,7 @@ func Generate(serverURL, binaryURL string, sess *auth.Session, ua string, flags 
 		BinaryName:  "locrest-client",
 		ExtraFlags:  extra,
 		HTTPAuth:    shellEscape(sess.HTTPAuth),
+		Infinity:    infinity,
 	}
 	var buf strings.Builder
 	if err := scriptTemplate.Execute(&buf, p); err != nil {

@@ -21,6 +21,13 @@
       "default_auth": true,
       "description": "Whether the role can choose their own tunnel TTL via query param. If false the server hard-overrides to max_ttl."
     },
+    "infinity": {
+      "type": "boolean",
+      "applies_to": ["public", "auth"],
+      "default_public": false,
+      "default_auth": true,
+      "description": "Whether the role can request an infinite tunnel lifetime via ?infinity=true query parameter."
+    },
     "max_ttl": {
       "type": "duration",
       "applies_to": ["public", "auth"],

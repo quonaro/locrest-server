@@ -69,7 +69,7 @@ func TestSessionCRUD(t *testing.T) {
 	}
 	defer db.Close()
 
-	sess, err := db.CreateSession(8080, 30001, "localhost", time.Hour, 8, "http", "public", "", "", nil)
+	sess, err := db.CreateSession(8080, 30001, "localhost", time.Hour, false, 8, "http", "public", "", "", nil)
 	if err != nil {
 		t.Fatalf("create session: %v", err)
 	}
@@ -131,7 +131,7 @@ func TestSessionAllowedIPs(t *testing.T) {
 	defer db.Close()
 
 	ips := []string{"192.168.1.0/24", "127.0.0.1/32"}
-	sess, err := db.CreateSession(8080, 30001, "localhost", time.Hour, 8, "http", "public", "", "", ips)
+	sess, err := db.CreateSession(8080, 30001, "localhost", time.Hour, false, 8, "http", "public", "", "", ips)
 	if err != nil {
 		t.Fatalf("create session: %v", err)
 	}

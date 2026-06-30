@@ -30,7 +30,7 @@ func validateSubdomain(s string) error {
 
 // CreateSession generates a new session with a unique subdomain, setup token and chisel token.
 // If preferredSubdomain is non-empty it is validated and used; otherwise a random one is generated.
-func (d *DB) CreateSession(localPort, serverPort int, targetHost string, ttl time.Duration, subdomainLen int, mode, role, httpAuth, preferredSubdomain string, allowedIPs []string) (*Session, error) {
+func (d *DB) CreateSession(localPort, serverPort int, targetHost string, ttl time.Duration, infinity bool, subdomainLen int, mode, role, httpAuth, preferredSubdomain string, allowedIPs []string) (*Session, error) {
 	if targetHost == "" {
 		targetHost = "localhost"
 	}
@@ -78,11 +78,14 @@ func (d *DB) CreateSession(localPort, serverPort int, targetHost string, ttl tim
 			Token:      token,
 			SetupToken: setup,
 			CreatedAt:  time.Now(),
-			ExpiresAt:  time.Now().Add(ttl),
 			Mode:       mode,
 			Role:       role,
 			HTTPAuth:   httpAuth,
 			AllowedIPs: allowedIPs,
+			Infinity:   infinity,
+		}
+		if !infinity {
+			sess.ExpiresAt = time.Now().Add(ttl)
 		}
 		data, err := json.Marshal(sess.toData())
 		if err != nil {

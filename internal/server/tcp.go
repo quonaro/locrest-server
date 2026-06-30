@@ -17,7 +17,7 @@ func isCurlLikeRequest(r *http.Request) bool {
 	return strings.Contains(ua, "curl") || strings.Contains(ua, "wget")
 }
 
-func (f *Frontend) startTCPListener(port int, setupToken string) {
+func (f *Frontend) startTCPListener(port int) {
 	addr := fmt.Sprintf(":%d", port)
 	ln, err := net.Listen("tcp", addr)
 	if err != nil {
