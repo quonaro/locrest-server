@@ -71,8 +71,12 @@ download() {
 }
 
 try_download() {
-	local url="$1" file="$2"
-	if download "$url" "$file" 2>/dev/null; then return 0; fi
+	local url="$1" file="$2" errfile="${3:-}"
+	if [ -n "$errfile" ]; then
+		if download "$url" "$file" 2>"$errfile"; then return 0; fi
+	else
+		if download "$url" "$file" 2>/dev/null; then return 0; fi
+	fi
 	rm -f "$file"
 	return 1
 }
@@ -90,23 +94,26 @@ download_binary() {
 	else
 		base_url="https://github.com/$OWNER/$REPO/releases/download/$VERSION"
 	fi
-	local tmp_dir asset candidate
+	local tmp_dir asset candidate err
 	tmp_dir=$(mktemp -d)
 	asset="$BIN_NAME-$OS-$ARCH"
+	err="$tmp_dir/download.err"
 	info "detected platform: $OS/$ARCH"
-	info "downloading from $base_url"
-	if try_download "$base_url/$asset" "$tmp_dir/$asset"; then BIN_TMP="$tmp_dir/$asset"
-	elif try_download "$base_url/$asset.tar.gz" "$tmp_dir/$asset.tar.gz"; then
+	info "downloading $asset from $base_url"
+	if try_download "$base_url/$asset" "$tmp_dir/$asset" "$err"; then BIN_TMP="$tmp_dir/$asset"
+	elif try_download "$base_url/$asset.tar.gz" "$tmp_dir/$asset.tar.gz" "$err"; then
 		tar -xzf "$tmp_dir/$asset.tar.gz" -C "$tmp_dir"
 		candidate=$(find "$tmp_dir" -maxdepth 2 -type f -name "$BIN_NAME" | head -n 1)
 		[ -z "$candidate" ] && error "archive did not contain $BIN_NAME"
 		BIN_TMP="$candidate"
-	elif try_download "$base_url/${BIN_NAME}_${OS}_${ARCH}.tar.gz" "$tmp_dir/alt.tar.gz"; then
+	elif try_download "$base_url/${BIN_NAME}_${OS}_${ARCH}.tar.gz" "$tmp_dir/alt.tar.gz" "$err"; then
 		tar -xzf "$tmp_dir/alt.tar.gz" -C "$tmp_dir"
 		candidate=$(find "$tmp_dir" -maxdepth 2 -type f -name "$BIN_NAME" | head -n 1)
 		[ -z "$candidate" ] && error "archive did not contain $BIN_NAME"
 		BIN_TMP="$candidate"
-	else error "could not find release asset for $OS/$ARCH"
+	else
+		printf '%s\n' "tried:" "$base_url/$asset" "$base_url/$asset.tar.gz" "$base_url/${BIN_NAME}_${OS}_${ARCH}.tar.gz" >&2
+		error "could not find release asset for $OS/$ARCH ($(cat "$err"))"
 	fi
 	if try_download "$base_url/$(basename "$BIN_TMP").sha256" "$tmp_dir/checksum"; then
 		local expected actual
