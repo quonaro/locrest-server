@@ -84,7 +84,12 @@ sha256_file() {
 }
 
 download_binary() {
-	local base_url="https://github.com/$OWNER/$REPO/releases/download/$VERSION"
+	local base_url
+	if [ "$VERSION" = "latest" ]; then
+		base_url="https://github.com/$OWNER/$REPO/releases/latest/download"
+	else
+		base_url="https://github.com/$OWNER/$REPO/releases/download/$VERSION"
+	fi
 	local tmp_dir asset candidate
 	tmp_dir=$(mktemp -d)
 	asset="$BIN_NAME-$OS-$ARCH"
