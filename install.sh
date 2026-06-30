@@ -17,9 +17,19 @@ INIT_SYSTEM=""
 OS=""
 ARCH=""
 BIN_TMP=""
-info() { printf '==> %s\n' "$*"; }
-warn() { printf 'WARN: %s\n' "$*" >&2; }
-error() { printf 'ERROR: %s\n' "$*" >&2; exit 1; }
+if [ -t 1 ]; then
+	RED='\033[0;31m'
+	GREEN='\033[0;32m'
+	YELLOW='\033[1;33m'
+	BLUE='\033[0;34m'
+	NC='\033[0m'
+else
+	RED='' GREEN='' YELLOW='' BLUE='' NC=''
+fi
+
+info() { printf "${GREEN}==>${NC} %s\n" "$*"; }
+warn() { printf "${YELLOW}WARN:${NC} %s\n" "$*" >&2; }
+error() { printf "${RED}ERROR:${NC} %s\n" "$*" >&2; exit 1; }
 detect_platform() {
 	OS=$(uname -s | tr '[:upper:]' '[:lower:]')
 	ARCH=$(uname -m)
@@ -46,7 +56,11 @@ detect_init() {
 	fi
 }
 
-require_root() { [ "$(id -u)" -ne 0 ] && error "this script must be run as root"; }
+require_root() {
+	if [ "$(id -u)" -ne 0 ]; then
+		error "this script must be run as root"
+	fi
+}
 
 download() {
 	local url="$1" file="$2"
@@ -280,7 +294,16 @@ enable_start_service() {
 	esac
 }
 
+banner() {
+	printf "${BLUE}"
+	printf '+-----------------------------------+\n'
+	printf '|  Locrest Server Installer         |\n'
+	printf '+-----------------------------------+\n'
+	printf "${NC}\n"
+}
+
 main() {
+	banner
 	detect_platform
 	detect_init
 	require_root
