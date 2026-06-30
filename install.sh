@@ -151,13 +151,10 @@ fetch_latest_version() {
 }
 
 download_binary() {
-	local base_url display_version
+	local base_url
 	if [ "$VERSION" = "latest" ]; then
-		display_version=$(fetch_latest_version)
-		[ -z "$display_version" ] && display_version="latest"
 		base_url="https://github.com/$OWNER/$REPO/releases/latest/download"
 	else
-		display_version="$VERSION"
 		base_url="https://github.com/$OWNER/$REPO/releases/download/$VERSION"
 	fi
 	local tmp_dir asset candidate err
@@ -165,7 +162,6 @@ download_binary() {
 	asset="$BIN_NAME-$OS-$ARCH"
 	err="$tmp_dir/download.err"
 	info "detected platform: $OS/$ARCH"
-	info "version: $display_version"
 	info "downloading $asset"
 	if try_download "$base_url/$asset" "$tmp_dir/$asset" "$err"; then BIN_TMP="$tmp_dir/$asset"
 	elif try_download "$base_url/$asset.tar.gz" "$tmp_dir/$asset.tar.gz" "$err"; then
@@ -384,6 +380,14 @@ banner() {
 
 main() {
 	banner
+	local display_version
+	if [ "$VERSION" = "latest" ]; then
+		display_version=$(fetch_latest_version)
+		[ -z "$display_version" ] && display_version="latest"
+	else
+		display_version="$VERSION"
+	fi
+	info "version: $display_version"
 	detect_platform
 	detect_init
 	require_root
