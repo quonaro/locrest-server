@@ -113,7 +113,11 @@ func (f *Frontend) handleScript(w http.ResponseWriter, r *http.Request, localPor
 		return
 	}
 
-	sess, err := f.store.Create(localPort, serverPort, targetHost, ttl, infinity, f.cfg.SubdomainLength, mode, role, httpAuth, requestedSubdomain, allowedIPs)
+	var username string
+	if u := bearerUser(r, f.db); u != nil {
+		username = u.Username
+	}
+	sess, err := f.store.Create(localPort, serverPort, targetHost, ttl, infinity, f.cfg.SubdomainLength, mode, role, httpAuth, requestedSubdomain, allowedIPs, username)
 	if err != nil {
 		msg := err.Error()
 		status := http.StatusInternalServerError

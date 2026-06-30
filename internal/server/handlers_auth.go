@@ -255,6 +255,7 @@ func (f *Frontend) handleVerify(w http.ResponseWriter, r *http.Request) {
 		"mode":        sess.Mode,
 		"http_auth":   sess.HTTPAuth,
 		"authorized":  sess.Role != "public",
+		"username":    sess.Username,
 	}
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(resp)

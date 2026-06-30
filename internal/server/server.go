@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"net"
 	"net/http"
+	"os"
 	"regexp"
 	"strconv"
 	"strings"
@@ -115,6 +116,23 @@ func (f *Frontend) Run(ctx context.Context) error {
 		}
 	}
 
+	adminMux := f.adminMux()
+	adminSrv := &http.Server{Handler: adminMux}
+	_ = os.Remove(f.cfg.AdminSocketPath)
+	adminLn, err := net.Listen("unix", f.cfg.AdminSocketPath)
+	if err != nil {
+		return fmt.Errorf("admin socket: %w", err)
+	}
+	defer adminLn.Close()
+	if err := os.Chmod(f.cfg.AdminSocketPath, 0600); err != nil {
+		return fmt.Errorf("admin socket chmod: %w", err)
+	}
+	go func() {
+		if err := adminSrv.Serve(adminLn); err != nil && err != http.ErrServerClosed {
+			slog.Error("admin server failed", "error", err)
+		}
+	}()
+
 	go f.startCleaner(ctx)
 	go f.startDisconnectWatcher(ctx)
 
@@ -140,6 +158,9 @@ func (f *Frontend) Run(ctx context.Context) error {
 	case <-ctx.Done():
 		shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
+		if err := adminSrv.Shutdown(shutdownCtx); err != nil {
+			slog.Error("admin server shutdown failed", "error", err)
+		}
 		if insecureSrv != nil {
 			if err := insecureSrv.Shutdown(shutdownCtx); err != nil {
 				slog.Error("insecure server shutdown failed", "error", err)

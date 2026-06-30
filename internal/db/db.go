@@ -2,6 +2,7 @@ package db
 
 import (
 	"fmt"
+	"time"
 
 	bolt "go.etcd.io/bbolt"
 )
@@ -21,8 +22,10 @@ type DB struct {
 }
 
 // Open opens or creates the BoltDB file and initializes buckets.
+// A 5-second timeout prevents CLI commands from blocking forever when the
+// server process already holds the database lock.
 func Open(path string) (*DB, error) {
-	db, err := bolt.Open(path, 0600, nil)
+	db, err := bolt.Open(path, 0600, &bolt.Options{Timeout: 5 * time.Second})
 	if err != nil {
 		return nil, fmt.Errorf("open db: %w", err)
 	}

@@ -69,7 +69,7 @@ func TestSessionCRUD(t *testing.T) {
 	}
 	defer db.Close()
 
-	sess, err := db.CreateSession(8080, 30001, "localhost", time.Hour, false, 8, "http", "public", "", "", nil)
+	sess, err := db.CreateSession(8080, 30001, "localhost", time.Hour, false, 8, "http", "public", "", "", nil, "")
 	if err != nil {
 		t.Fatalf("create session: %v", err)
 	}
@@ -131,7 +131,7 @@ func TestSessionAllowedIPs(t *testing.T) {
 	defer db.Close()
 
 	ips := []string{"192.168.1.0/24", "127.0.0.1/32"}
-	sess, err := db.CreateSession(8080, 30001, "localhost", time.Hour, false, 8, "http", "public", "", "", ips)
+	sess, err := db.CreateSession(8080, 30001, "localhost", time.Hour, false, 8, "http", "public", "", "", ips, "")
 	if err != nil {
 		t.Fatalf("create session: %v", err)
 	}
@@ -147,5 +147,37 @@ func TestSessionAllowedIPs(t *testing.T) {
 		if got.AllowedIPs[i] != ips[i] {
 			t.Fatalf("expected %q, got %q", ips[i], got.AllowedIPs[i])
 		}
+	}
+}
+
+func TestInvalidateExpiredUsersSkipsZeroExpire(t *testing.T) {
+	path := "test_cleanup.db"
+	defer os.Remove(path)
+
+	db, err := Open(path)
+	if err != nil {
+		t.Fatalf("open db: %v", err)
+	}
+	defer db.Close()
+
+	user := &User{
+		Username:       "alice",
+		APIToken:       "tok123",
+		SeedPhraseHash: "hash",
+		CreatedAt:      time.Now().UTC(),
+		// Expire left as zero value — should never expire
+	}
+	if err := db.CreateUser(user); err != nil {
+		t.Fatalf("create user: %v", err)
+	}
+
+	db.invalidateExpiredUsers()
+
+	got, err := db.GetUserByToken("tok123")
+	if err != nil {
+		t.Fatalf("user token invalidated unexpectedly: %v", err)
+	}
+	if got.APIToken != "tok123" {
+		t.Fatalf("token cleared for zero-expire user")
 	}
 }

@@ -322,7 +322,7 @@ func TestHandleScript(t *testing.T) {
 func TestHandleScriptMaxSessions(t *testing.T) {
 	f := newTestFrontend(t, nil)
 	f.cfg.MaxSessions = 1
-	if _, err := f.store.Create(8080, 30001, "localhost", time.Hour, false, 8, "http", "public", "", "", nil); err != nil {
+	if _, err := f.store.Create(8080, 30001, "localhost", time.Hour, false, 8, "http", "public", "", "", nil, ""); err != nil {
 		t.Fatalf("create session: %v", err)
 	}
 	req := httptest.NewRequest(http.MethodGet, "/8080", nil)
@@ -338,7 +338,7 @@ func TestHandleChallengeAndVerify(t *testing.T) {
 	f := newTestFrontend(t, nil)
 
 	// Create a session and register a pubkey.
-	sess, err := f.store.Create(8080, 30001, "localhost", time.Hour, false, 8, "http", "public", "", "", nil)
+	sess, err := f.store.Create(8080, 30001, "localhost", time.Hour, false, 8, "http", "public", "", "", nil, "")
 	if err != nil {
 		t.Fatalf("create session: %v", err)
 	}
@@ -409,7 +409,7 @@ func TestHandleVerifyInfinityDeniedForPublic(t *testing.T) {
 	f := newTestFrontend(t, nil)
 
 	// Create a public session with infinity=true as if handleScript accepted the flag.
-	sess, err := f.store.Create(8080, 30001, "localhost", 0, true, 8, "http", "public", "", "", nil)
+	sess, err := f.store.Create(8080, 30001, "localhost", 0, true, 8, "http", "public", "", "", nil, "")
 	if err != nil {
 		t.Fatalf("create session: %v", err)
 	}
@@ -458,7 +458,7 @@ func TestHandleVerifyInfinityDeniedForPublic(t *testing.T) {
 
 func TestHandleVerifyReplayNonce(t *testing.T) {
 	f := newTestFrontend(t, nil)
-	sess, err := f.store.Create(8080, 30001, "localhost", time.Hour, false, 8, "http", "public", "", "", nil)
+	sess, err := f.store.Create(8080, 30001, "localhost", time.Hour, false, 8, "http", "public", "", "", nil, "")
 	if err != nil {
 		t.Fatalf("create session: %v", err)
 	}
@@ -506,7 +506,7 @@ func TestHandleVerifyReplayNonce(t *testing.T) {
 
 func TestHandleRegister(t *testing.T) {
 	f := newTestFrontend(t, nil)
-	sess, err := f.store.Create(8080, 30001, "localhost", time.Hour, false, 8, "http", "public", "", "", nil)
+	sess, err := f.store.Create(8080, 30001, "localhost", time.Hour, false, 8, "http", "public", "", "", nil, "")
 	if err != nil {
 		t.Fatalf("create session: %v", err)
 	}
@@ -574,7 +574,7 @@ func TestHandleRegenerate(t *testing.T) {
 
 func TestHandleStatus(t *testing.T) {
 	f := newTestFrontend(t, nil)
-	sess, err := f.store.Create(8080, 30001, "localhost", time.Hour, false, 8, "http", "public", "", "", nil)
+	sess, err := f.store.Create(8080, 30001, "localhost", time.Hour, false, 8, "http", "public", "", "", nil, "")
 	if err != nil {
 		t.Fatalf("create session: %v", err)
 	}
@@ -689,7 +689,7 @@ func TestSendJSONError(t *testing.T) {
 
 func TestCheckBasicAuth(t *testing.T) {
 	f := newTestFrontend(t, nil)
-	sess, err := f.store.Create(8080, 30001, "localhost", time.Hour, false, 8, "http", "public", "user:pass", "", nil)
+	sess, err := f.store.Create(8080, 30001, "localhost", time.Hour, false, 8, "http", "public", "user:pass", "", nil, "")
 	if err != nil {
 		t.Fatalf("create session: %v", err)
 	}
@@ -716,7 +716,7 @@ func TestCheckBasicAuth(t *testing.T) {
 
 func TestCheckAllowedIPs(t *testing.T) {
 	f := newTestFrontend(t, nil)
-	sess, err := f.store.Create(8080, 30001, "localhost", time.Hour, false, 8, "http", "public", "", "", []string{"192.168.1.0/24"})
+	sess, err := f.store.Create(8080, 30001, "localhost", time.Hour, false, 8, "http", "public", "", "", []string{"192.168.1.0/24"}, "")
 	if err != nil {
 		t.Fatalf("create session: %v", err)
 	}
@@ -829,7 +829,7 @@ func TestHandlerStatusEndpointDisabled(t *testing.T) {
 
 func TestChallengeActivated(t *testing.T) {
 	f := newTestFrontend(t, nil)
-	sess, err := f.store.Create(3000, 0, "localhost", time.Hour, false, 8, "http", "public", "", "", nil)
+	sess, err := f.store.Create(3000, 0, "localhost", time.Hour, false, 8, "http", "public", "", "", nil, "")
 	if err != nil {
 		t.Fatalf("create session: %v", err)
 	}
@@ -856,7 +856,7 @@ func TestChallengeActivated(t *testing.T) {
 
 func TestBasicAuthCheck(t *testing.T) {
 	f := newTestFrontend(t, nil)
-	sess, err := f.store.Create(3000, 30001, "localhost", time.Hour, false, 8, "http", "public", "user:pass", "", nil)
+	sess, err := f.store.Create(3000, 30001, "localhost", time.Hour, false, 8, "http", "public", "user:pass", "", nil, "")
 	if err != nil {
 		t.Fatalf("create session: %v", err)
 	}
@@ -883,7 +883,7 @@ func TestBasicAuthCheck(t *testing.T) {
 
 func TestReloadChiselUsers(t *testing.T) {
 	f := newTestFrontend(t, nil)
-	sess, err := f.store.Create(3000, 30001, "localhost", time.Hour, false, 8, "http", "public", "", "", nil)
+	sess, err := f.store.Create(3000, 30001, "localhost", time.Hour, false, 8, "http", "public", "", "", nil, "")
 	if err != nil {
 		t.Fatalf("create session: %v", err)
 	}

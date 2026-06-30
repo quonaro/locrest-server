@@ -24,6 +24,7 @@ type sessionData struct {
 	HTTPAuth   string    `json:"http_auth"`
 	AllowedIPs []string  `json:"allowed_ips"`
 	Infinity   bool      `json:"infinity"`
+	Username   string    `json:"username"`
 }
 
 // Session holds tunnel metadata and the registered client public key.
@@ -46,6 +47,7 @@ type Session struct {
 	HTTPAuth   string
 	AllowedIPs []string
 	Infinity   bool
+	Username   string
 }
 
 func (s *Session) toData() *sessionData {
@@ -55,7 +57,7 @@ func (s *Session) toData() *sessionData {
 		SetupToken: s.SetupToken, CreatedAt: s.CreatedAt, ExpiresAt: s.ExpiresAt,
 		Nonce: s.Nonce, NonceAt: s.NonceAt, Activated: s.Activated,
 		Mode: s.Mode, Role: s.Role, HTTPAuth: s.HTTPAuth, AllowedIPs: s.AllowedIPs,
-		Infinity: s.Infinity,
+		Infinity: s.Infinity, Username: s.Username,
 	}
 }
 
@@ -77,6 +79,7 @@ func (s *Session) fromData(d *sessionData) {
 	s.HTTPAuth = d.HTTPAuth
 	s.AllowedIPs = d.AllowedIPs
 	s.Infinity = d.Infinity
+	s.Username = d.Username
 }
 
 // SetNonce stores a fresh nonce and its timestamp under lock.

@@ -1,9 +1,14 @@
 package cli
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
+	"io"
 	"log/slog"
+	"net"
+	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
@@ -48,6 +53,17 @@ func openDB(cfg *config.ServerConfig) (*db.DB, error) {
 		return nil, fmt.Errorf("open db: %w", err)
 	}
 	return database, nil
+}
+
+func adminClient(socketPath string) *http.Client {
+	return &http.Client{
+		Transport: &http.Transport{
+			DialContext: func(_ context.Context, _, _ string) (net.Conn, error) {
+				return net.Dial("unix", socketPath)
+			},
+		},
+		Timeout: 10 * time.Second,
+	}
 }
 
 // InitConfig writes a default config file to disk.
@@ -152,33 +168,36 @@ func UserAdd(ctx context.Context, nctx engine.NativeContext) error {
 		return err
 	}
 
-	database, err := openDB(cfg)
+	body, _ := json.Marshal(map[string]string{"username": username})
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, "http://unix/users", bytes.NewReader(body))
 	if err != nil {
-		return err
+		return fmt.Errorf("build request: %w", err)
 	}
-	defer database.Close()
+	req.Header.Set("Content-Type", "application/json")
 
-	if _, err := database.GetUser(username); err == nil {
+	client := adminClient(cfg.AdminSocketPath)
+	resp, err := client.Do(req)
+	if err != nil {
+		return fmt.Errorf("admin request failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode == http.StatusConflict {
 		return fmt.Errorf("user %q already exists", username)
 	}
-
-	apiToken, err := auth.RandString(32)
-	if err != nil {
-		return fmt.Errorf("generate token: %w", err)
-	}
-	seedPhrase, err := auth.GenerateSeedPhrase()
-	if err != nil {
-		return fmt.Errorf("generate seed phrase: %w", err)
+	if resp.StatusCode != http.StatusOK {
+		data, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("admin request failed: %s: %s", resp.Status, string(data))
 	}
 
-	user := &db.User{
-		Username:       username,
-		APIToken:       apiToken,
-		SeedPhraseHash: db.HashSeedPhrase(seedPhrase),
-		CreatedAt:      time.Now().UTC(),
+	var result struct {
+		Username   string    `json:"username"`
+		APIToken   string    `json:"api_token"`
+		SeedPhrase string    `json:"seed_phrase"`
+		CreatedAt  time.Time `json:"created_at"`
 	}
-	if err := database.CreateUser(user); err != nil {
-		return fmt.Errorf("create user: %w", err)
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return fmt.Errorf("decode response: %w", err)
 	}
 
 	greenBold := color.New(color.FgGreen, color.Bold)
@@ -187,24 +206,24 @@ func UserAdd(ctx context.Context, nctx engine.NativeContext) error {
 	magenta := color.New(color.FgMagenta)
 	dim := color.New(color.FgHiBlack)
 
-	greenBold.Fprintf(nctx.Stdout, "User created: %s\n\n", username)
+	greenBold.Fprintf(nctx.Stdout, "User created: %s\n\n", result.Username)
 
 	magenta.Fprintln(nctx.Stdout, "Credentials")
 	cyan.Fprintf(nctx.Stdout, "  API token:   ")
-	yellow.Fprintln(nctx.Stdout, apiToken)
+	yellow.Fprintln(nctx.Stdout, result.APIToken)
 	cyan.Fprintf(nctx.Stdout, "  Seed phrase: ")
-	yellow.Fprintln(nctx.Stdout, seedPhrase)
+	yellow.Fprintln(nctx.Stdout, result.SeedPhrase)
 	dim.Fprintln(nctx.Stdout, "  Save these values. The seed phrase is the only way to recover a lost token.")
 
 	fmt.Fprintln(nctx.Stdout)
 	magenta.Fprintln(nctx.Stdout, "Usage")
 	cyan.Fprintf(nctx.Stdout, "  Create an authenticated tunnel")
 	fmt.Fprintf(nctx.Stdout, " (replace 8080 with your local port):\n")
-	dim.Fprintf(nctx.Stdout, "    curl -H \"Authorization: Bearer %s\" https://%s/8080?infinity=true | bash\n", apiToken, cfg.Domain)
+	dim.Fprintf(nctx.Stdout, "    curl -H \"Authorization: Bearer %s\" https://%s/8080?infinity=true | bash\n", result.APIToken, cfg.Domain)
 
 	fmt.Fprintln(nctx.Stdout)
 	cyan.Fprintln(nctx.Stdout, "  Regenerate a lost API token using the seed phrase:")
-	dim.Fprintf(nctx.Stdout, "    curl -X POST -H \"Content-Type: application/json\" -d '{\"seed_phrase\":\"%s\"}' https://%s/regenerate\n", seedPhrase, cfg.Domain)
+	dim.Fprintf(nctx.Stdout, "    curl -X POST -H \"Content-Type: application/json\" -d '{\"seed_phrase\":\"%s\"}' https://%s/regenerate\n", result.SeedPhrase, cfg.Domain)
 
 	fmt.Fprintln(nctx.Stdout)
 	dim.Fprintln(nctx.Stdout, "Note: the client binary does not use the API token directly.")
@@ -224,18 +243,24 @@ func UserDelete(ctx context.Context, nctx engine.NativeContext) error {
 		return err
 	}
 
-	database, err := openDB(cfg)
+	req, err := http.NewRequestWithContext(ctx, http.MethodDelete, fmt.Sprintf("http://unix/users/%s", username), nil)
 	if err != nil {
-		return err
+		return fmt.Errorf("build request: %w", err)
 	}
-	defer database.Close()
 
-	if _, err := database.GetUser(username); err != nil {
+	client := adminClient(cfg.AdminSocketPath)
+	resp, err := client.Do(req)
+	if err != nil {
+		return fmt.Errorf("admin request failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode == http.StatusNotFound {
 		return fmt.Errorf("user %q not found", username)
 	}
-
-	if err := database.DeleteUser(username); err != nil {
-		return fmt.Errorf("delete user: %w", err)
+	if resp.StatusCode != http.StatusNoContent {
+		data, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("admin request failed: %s: %s", resp.Status, string(data))
 	}
 
 	color.New(color.FgRed, color.Bold).Fprint(nctx.Stdout, "User deleted: ")
@@ -255,29 +280,38 @@ func UserRegenerate(ctx context.Context, nctx engine.NativeContext) error {
 		return err
 	}
 
-	database, err := openDB(cfg)
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, fmt.Sprintf("http://unix/users/%s/regenerate", username), nil)
 	if err != nil {
-		return err
+		return fmt.Errorf("build request: %w", err)
 	}
-	defer database.Close()
 
-	if _, err := database.GetUser(username); err != nil {
+	client := adminClient(cfg.AdminSocketPath)
+	resp, err := client.Do(req)
+	if err != nil {
+		return fmt.Errorf("admin request failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode == http.StatusNotFound {
 		return fmt.Errorf("user %q not found", username)
 	}
-
-	newToken, err := auth.RandString(32)
-	if err != nil {
-		return fmt.Errorf("generate token: %w", err)
+	if resp.StatusCode != http.StatusOK {
+		data, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("admin request failed: %s: %s", resp.Status, string(data))
 	}
-	if err := database.UpdateUserToken(username, newToken); err != nil {
-		return fmt.Errorf("update token: %w", err)
+
+	var result struct {
+		APIToken string `json:"api_token"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return fmt.Errorf("decode response: %w", err)
 	}
 
 	greenBold := color.New(color.FgGreen, color.Bold)
 	greenBold.Fprintf(nctx.Stdout, "Token regenerated for ")
 	color.New(color.FgYellow).Fprintln(nctx.Stdout, username)
 	color.New(color.FgCyan).Fprint(nctx.Stdout, "New API token: ")
-	color.New(color.FgYellow).Fprintln(nctx.Stdout, newToken)
+	color.New(color.FgYellow).Fprintln(nctx.Stdout, result.APIToken)
 	return nil
 }
 
@@ -293,18 +327,38 @@ func UserShow(ctx context.Context, nctx engine.NativeContext) error {
 		return err
 	}
 
-	database, err := openDB(cfg)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, fmt.Sprintf("http://unix/users/%s", username), nil)
 	if err != nil {
-		return err
+		return fmt.Errorf("build request: %w", err)
 	}
-	defer database.Close()
 
-	user, err := database.GetUser(username)
+	client := adminClient(cfg.AdminSocketPath)
+	resp, err := client.Do(req)
 	if err != nil {
+		return fmt.Errorf("admin request failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode == http.StatusNotFound {
 		return fmt.Errorf("user %q not found", username)
 	}
+	if resp.StatusCode != http.StatusOK {
+		data, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("admin request failed: %s: %s", resp.Status, string(data))
+	}
 
-	printUser(nctx, user)
+	var result struct {
+		Username       string    `json:"username"`
+		APIToken       string    `json:"api_token"`
+		SeedPhraseHash string    `json:"seed_phrase_hash"`
+		CreatedAt      time.Time `json:"created_at"`
+		Expire         time.Time `json:"expire"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return fmt.Errorf("decode response: %w", err)
+	}
+
+	printUser(nctx, result.Username, result.APIToken, result.CreatedAt, result.Expire)
 	return nil
 }
 
@@ -315,36 +369,53 @@ func UserList(ctx context.Context, nctx engine.NativeContext) error {
 		return err
 	}
 
-	database, err := openDB(cfg)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, "http://unix/users", nil)
 	if err != nil {
-		return err
-	}
-	defer database.Close()
-
-	users, err := database.ListUsers()
-	if err != nil {
-		return fmt.Errorf("list users: %w", err)
+		return fmt.Errorf("build request: %w", err)
 	}
 
-	if len(users) == 0 {
+	client := adminClient(cfg.AdminSocketPath)
+	resp, err := client.Do(req)
+	if err != nil {
+		return fmt.Errorf("admin request failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		data, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("admin request failed: %s: %s", resp.Status, string(data))
+	}
+
+	var result []struct {
+		Username       string    `json:"username"`
+		APIToken       string    `json:"api_token"`
+		SeedPhraseHash string    `json:"seed_phrase_hash"`
+		CreatedAt      time.Time `json:"created_at"`
+		Expire         time.Time `json:"expire"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return fmt.Errorf("decode response: %w", err)
+	}
+
+	if len(result) == 0 {
 		color.New(color.FgHiBlack).Fprintln(nctx.Stdout, "No users")
 		return nil
 	}
 
-	for _, user := range users {
-		printUser(nctx, user)
+	for _, u := range result {
+		printUser(nctx, u.Username, u.APIToken, u.CreatedAt, u.Expire)
 	}
 	return nil
 }
 
-func printUser(nctx engine.NativeContext, user *db.User) {
+func printUser(nctx engine.NativeContext, username, apiToken string, createdAt, expire time.Time) {
 	color.New(color.FgCyan).Fprint(nctx.Stdout, "username: ")
-	color.New(color.FgYellow).Fprintln(nctx.Stdout, user.Username)
+	color.New(color.FgYellow).Fprintln(nctx.Stdout, username)
 	color.New(color.FgCyan).Fprint(nctx.Stdout, "  api_token:  ")
-	color.New(color.FgYellow).Fprintln(nctx.Stdout, user.APIToken)
-	color.New(color.FgHiBlack).Fprintf(nctx.Stdout, "  created_at: %s\n", user.CreatedAt.Format(time.RFC3339))
-	if !user.Expire.IsZero() {
-		color.New(color.FgHiBlack).Fprintf(nctx.Stdout, "  expire:     %s\n", user.Expire.Format(time.RFC3339))
+	color.New(color.FgYellow).Fprintln(nctx.Stdout, apiToken)
+	color.New(color.FgHiBlack).Fprintf(nctx.Stdout, "  created_at: %s\n", createdAt.Format(time.RFC3339))
+	if !expire.IsZero() {
+		color.New(color.FgHiBlack).Fprintf(nctx.Stdout, "  expire:     %s\n", expire.Format(time.RFC3339))
 	}
 	fmt.Fprintln(nctx.Stdout)
 }

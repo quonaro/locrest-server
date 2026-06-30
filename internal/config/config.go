@@ -74,6 +74,7 @@ type ServerConfig struct {
 	StatusEndpoint      bool              `yaml:"status_endpoint_enabled"`
 	CustomHeaders       map[string]string `yaml:"custom_response_headers"`
 	Permissions         PermissionsConfig `yaml:"permissions"`
+	AdminSocketPath     string            `yaml:"admin_socket_path"`
 }
 
 type yamlRoot struct {
@@ -98,6 +99,7 @@ func DefaultConfig() *ServerConfig {
 		SubdomainLength:     16,
 		LogLevel:            "info",
 		StatusEndpoint:      true,
+		AdminSocketPath:     "locrest-admin.sock",
 		Permissions: PermissionsConfig{
 			Public: Permissions{
 				CreateTunnel: true,

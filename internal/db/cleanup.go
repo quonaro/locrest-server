@@ -41,7 +41,7 @@ func (d *DB) invalidateExpiredUsers() {
 			if err := json.Unmarshal(v, &u); err != nil {
 				continue
 			}
-			if now.After(u.Expire) {
+			if !u.Expire.IsZero() && now.After(u.Expire) {
 				_ = tx.Bucket([]byte(bucketUsersByToken)).Delete([]byte(u.APIToken))
 				u.APIToken = ""
 				newData, _ := json.Marshal(u)
