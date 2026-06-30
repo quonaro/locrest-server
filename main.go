@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"strings"
 
 	_ "embed"
 
@@ -16,21 +17,47 @@ import (
 //go:embed cli.yml
 var cliYAML []byte
 
+func parseConfigFlag(args []string) (string, []string) {
+	var configPath string
+	var remaining []string
+	for i := 0; i < len(args); i++ {
+		switch {
+		case args[i] == "-c" || args[i] == "--config":
+			if i+1 < len(args) {
+				configPath = args[i+1]
+				i++
+			}
+		case strings.HasPrefix(args[i], "--config="):
+			configPath = strings.TrimPrefix(args[i], "--config=")
+		case strings.HasPrefix(args[i], "-c="):
+			configPath = strings.TrimPrefix(args[i], "-c=")
+		default:
+			remaining = append(remaining, args[i])
+		}
+	}
+	return configPath, remaining
+}
+
 func main() {
+	configPath, args := parseConfigFlag(os.Args[1:])
+	if configPath != "" {
+		os.Setenv("LOCREST_CONFIG", configPath)
+	}
+
+	if len(args) == 0 {
+		if err := cli.StartServer(); err != nil {
+			fmt.Fprintf(os.Stderr, "server: %v\n", err)
+			os.Exit(1)
+		}
+		return
+	}
+
 	builder := engine.NewBuilder("locrest-server", cliYAML)
-	builder.RegisterNative("init", cli.InitConfig)
-	builder.RegisterNative("run", cli.RunServer)
 	builder.RegisterNative("user.add", cli.UserAdd)
 	builder.RegisterNative("user.delete", cli.UserDelete)
 	builder.RegisterNative("user.regenerate", cli.UserRegenerate)
 	builder.RegisterNative("user.show", cli.UserShow)
 	builder.RegisterNative("user.list", cli.UserList)
-	builder.RegisterNative("service.install", cli.ServiceInstall)
-	builder.RegisterNative("service.uninstall", cli.ServiceUninstall)
-	builder.RegisterNative("service.start", cli.ServiceStart)
-	builder.RegisterNative("service.stop", cli.ServiceStop)
-	builder.RegisterNative("service.restart", cli.ServiceRestart)
-	builder.RegisterNative("service.status", cli.ServiceStatus)
 
 	app, err := builder.Build()
 	if err != nil {
@@ -38,12 +65,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	if len(os.Args) < 2 {
-		app.PrintHelp()
-		return
-	}
-
-	if err := app.Run(context.Background(), os.Args[1:]); err != nil {
+	if err := app.Run(context.Background(), args); err != nil {
 		var groupErr *engine.GroupError
 		if errors.As(err, &groupErr) {
 			app.PrintGroupHelp(groupErr.Groups)

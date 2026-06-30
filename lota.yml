@@ -17,4 +17,4 @@ run:
     cp locrest-server internal/embedbin/bin/locrest-server
 
     echo "[3/3] Starting server..."
-    ./locrest-server run
+    ./locrest-server

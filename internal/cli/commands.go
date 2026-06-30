@@ -7,19 +7,10 @@ import (
 	"net"
 	"net/http"
 	"os"
-	"os/signal"
-	"syscall"
 	"time"
 
-	"locrest-server/internal/auth"
-	"locrest-server/internal/chiselwrapper"
 	"locrest-server/internal/config"
 	"locrest-server/internal/db"
-	"locrest-server/internal/server"
-
-	"github.com/fatih/color"
-	"github.com/quonaro/lota/engine"
-	"gopkg.in/yaml.v3"
 )
 
 const defaultConfigPath = "locrest.yaml"
@@ -61,105 +52,6 @@ func adminClient(socketPath string) *http.Client {
 		},
 		Timeout: 10 * time.Second,
 	}
-}
-
-// InitConfig writes a default config file to disk.
-func InitConfig(ctx context.Context, nctx engine.NativeContext) error {
-	path := nctx.Args["path"]
-	if path == "" {
-		path = defaultConfigPath
-	}
-
-	if _, err := os.Stat(path); err == nil {
-		return fmt.Errorf("config file already exists: %s", path)
-	}
-
-	cfg := config.DefaultConfig()
-	root := struct {
-		Server config.ServerConfig `yaml:"server"`
-	}{Server: *cfg}
-
-	b, err := yaml.Marshal(root)
-	if err != nil {
-		return fmt.Errorf("marshal config: %w", err)
-	}
-
-	if err := os.WriteFile(path, b, 0600); err != nil {
-		return fmt.Errorf("write config: %w", err)
-	}
-
-	fmt.Fprintf(nctx.Stdout, "Created default config: %s\n", path)
-	return nil
-}
-
-// RunServer starts the locrest-server.
-func RunServer(ctx context.Context, nctx engine.NativeContext) error {
-	if nctx.Args["daemon"] == "true" {
-		if err := requireRoot(); err != nil {
-			return err
-		}
-		if err := createSystemUser(); err != nil {
-			return fmt.Errorf("create user: %w", err)
-		}
-		if err := createDirs(); err != nil {
-			return fmt.Errorf("create dirs: %w", err)
-		}
-		if err := ensureConfig(); err != nil {
-			return fmt.Errorf("ensure config: %w", err)
-		}
-		if err := installService(); err != nil {
-			return fmt.Errorf("install service: %w", err)
-		}
-		if err := enableService(); err != nil {
-			return fmt.Errorf("enable service: %w", err)
-		}
-		if err := startService(); err != nil {
-			return fmt.Errorf("start service: %w", err)
-		}
-		color.New(color.FgGreen, color.Bold).Fprintln(nctx.Stdout, "locrest-server is running as a system service")
-		return nil
-	}
-
-	cfg, err := loadConfig(configPath())
-	if err != nil {
-		return err
-	}
-
-	initLogLevel(cfg.LogLevel)
-
-	database, err := openDB(cfg)
-	if err != nil {
-		return err
-	}
-	defer database.Close()
-
-	store := auth.NewStore(database)
-	chisel, err := chiselwrapper.New()
-	if err != nil {
-		return fmt.Errorf("chisel init: %w", err)
-	}
-
-	ctx, stop := signal.NotifyContext(ctx, os.Interrupt, syscall.SIGTERM)
-	defer stop()
-
-	database.StartCleaner(ctx, 30*time.Second)
-
-	frontend := server.NewFrontend(cfg, store, chisel, database)
-	frontend.ReloadChiselUsers()
-
-	sigCh := make(chan os.Signal, 1)
-	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
-	go func() {
-		<-sigCh
-		slog.Info("shutting down")
-		stop()
-	}()
-
-	slog.Info("locrest-server starting", "http_port", cfg.HTTPPort, "https_port", cfg.HTTPSPort)
-	if err := frontend.Run(ctx); err != nil {
-		return fmt.Errorf("frontend run: %w", err)
-	}
-	return nil
 }
 
 func initLogLevel(level string) {

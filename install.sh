@@ -242,7 +242,7 @@ Group=__GROUP__
 WorkingDirectory=__DATA_DIR__
 Environment=LOCREST_CONFIG=__CONFIG_FILE__
 Environment=PATH=__INSTALL_DIR__:/usr/bin:/bin
-ExecStart=__INSTALL_DIR__/locrest-server run
+ExecStart=__INSTALL_DIR__/locrest-server
 Restart=on-failure
 RestartSec=5
 AmbientCapabilities=CAP_NET_BIND_SERVICE
@@ -270,7 +270,7 @@ install_sysv() {
 DAEMON=__INSTALL_DIR__/locrest-server
 PIDFILE=/var/run/locrest-server.pid
 export LOCREST_CONFIG=__CONFIG_FILE__
-start(){ cd __DATA_DIR__ || exit 1; if command -v start-stop-daemon >/dev/null 2>&1; then start-stop-daemon --start --quiet --make-pidfile --pidfile $PIDFILE --background --exec $DAEMON -- run; else nohup $DAEMON run >__LOG_DIR__/locrest-server.log 2>&1 & echo $! > $PIDFILE; fi; }
+start(){ cd __DATA_DIR__ || exit 1; if command -v start-stop-daemon >/dev/null 2>&1; then start-stop-daemon --start --quiet --make-pidfile --pidfile $PIDFILE --background --exec $DAEMON; else nohup $DAEMON >__LOG_DIR__/locrest-server.log 2>&1 & echo $! > $PIDFILE; fi; }
 stop(){ [ -f $PIDFILE ] && kill $(cat $PIDFILE) 2>/dev/null || true; rm -f $PIDFILE; }
 case "$1" in start) start;; stop) stop;; restart) stop; sleep 1; start;; status) [ -f $PIDFILE ] && kill -0 $(cat $PIDFILE) 2>/dev/null && echo running || echo not running;; *) echo "Usage: $0 {start|stop|restart|status}"; exit 1;; esac
 INIT
@@ -284,7 +284,7 @@ install_openrc() {
 	cat > "/etc/init.d/$SERVICE_NAME" <<'RC'
 #!/sbin/openrc-run
 command="__INSTALL_DIR__/locrest-server"
-command_args="run"
+command_args=""
 command_user="__USER__:__GROUP__"
 command_background=true
 pidfile="/var/run/locrest-server.pid"
@@ -308,7 +308,7 @@ name="locrest_server"
 rcvar="locrest_server_enable"
 pidfile="/var/run/${name}.pid"
 command="/usr/sbin/daemon"
-command_args="-p ${pidfile} -u __USER__ -r __INSTALL_DIR__/locrest-server run"
+command_args="-p ${pidfile} -u __USER__ -r __INSTALL_DIR__/locrest-server"
 locrest_server_env="LOCREST_CONFIG=__CONFIG_FILE__"
 load_rc_config $name
 run_rc_command "$1"
@@ -325,7 +325,7 @@ install_launchd() {
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0"><dict>
 <key>Label</key><string>locrest-server</string>
-<key>ProgramArguments</key><array><string>__INSTALL_DIR__/locrest-server</string><string>run</string></array>
+<key>ProgramArguments</key><array><string>__INSTALL_DIR__/locrest-server</string></array>
 <key>EnvironmentVariables</key><dict><key>LOCREST_CONFIG</key><string>__CONFIG_FILE__</string></dict>
 <key>WorkingDirectory</key><string>__DATA_DIR__</string>
 <key>RunAtLoad</key><true/>
