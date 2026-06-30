@@ -8,6 +8,9 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
+// DefaultBinaryURL is the client release URL used when no binary_url is configured.
+const DefaultBinaryURL = "https://github.com/quonaro/locrest-client/releases/latest/download"
+
 // RateLimit configures a sliding-window rate limiter.
 type RateLimit struct {
 	Requests int           `yaml:"requests"`
@@ -89,7 +92,7 @@ func DefaultConfig() *ServerConfig {
 		Domain:              "localtest.me",
 		TTL:                 1 * time.Hour,
 		TTLLimit:            7 * 24 * time.Hour,
-		BinaryURL:           "https://github.com/quonaro/locrest-client/releases/latest/download",
+		BinaryURL:           DefaultBinaryURL,
 		DBPath:              "locrest.db",
 		RootPage:            true,
 		MaxSessions:         10000,

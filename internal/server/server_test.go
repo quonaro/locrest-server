@@ -319,6 +319,31 @@ func TestHandleScript(t *testing.T) {
 	}
 }
 
+func TestEffectiveBinaryURL(t *testing.T) {
+	devCfg := config.DefaultConfig()
+	devCfg.Dev = true
+	fDev := newTestFrontend(t, devCfg)
+	if u := fDev.effectiveBinaryURL(); u != "" {
+		t.Fatalf("dev mode: expected empty URL, got %q", u)
+	}
+
+	prodCfg := config.DefaultConfig()
+	prodCfg.Dev = false
+	prodCfg.BinaryURL = "https://cdn.example.com/bin"
+	fProd := newTestFrontend(t, prodCfg)
+	if u := fProd.effectiveBinaryURL(); u != "https://cdn.example.com/bin" {
+		t.Fatalf("prod configured URL = %q, want https://cdn.example.com/bin", u)
+	}
+
+	emptyCfg := config.DefaultConfig()
+	emptyCfg.Dev = false
+	emptyCfg.BinaryURL = ""
+	fEmpty := newTestFrontend(t, emptyCfg)
+	if u := fEmpty.effectiveBinaryURL(); u != config.DefaultBinaryURL {
+		t.Fatalf("prod empty URL = %q, want %q", u, config.DefaultBinaryURL)
+	}
+}
+
 func TestHandleScriptMaxSessions(t *testing.T) {
 	f := newTestFrontend(t, nil)
 	f.cfg.MaxSessions = 1
