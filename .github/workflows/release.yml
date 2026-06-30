@@ -1,0 +1,45 @@
+name: Release
+
+on:
+  push:
+    tags:
+    - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    - uses: actions/setup-go@v5
+      with:
+        go-version-file: go.mod
+    - name: Fetch client binaries
+      run: |
+        mkdir -p internal/embedbin/bin
+        platforms="linux-amd64 linux-arm64 linux-arm linux-386 darwin-amd64 darwin-arm64 freebsd-amd64"
+        for pair in ${platforms}; do
+          os="${pair%-*}"
+          arch="${pair#*-}"
+          url="https://github.com/quonaro/locrest-client/releases/latest/download/locrest-client-${os}-${arch}"
+          curl -fsSL -o "internal/embedbin/bin/locrest-client-${os}-${arch}" "$url" || rm -f "internal/embedbin/bin/locrest-client-${os}-${arch}"
+        done
+        ls -la internal/embedbin/bin || true
+    - name: Build all binaries
+      run: |
+        mkdir -p dist
+        for pair in linux-amd64 linux-arm64 linux-arm linux-386 darwin-amd64 darwin-arm64 freebsd-amd64; do
+          os="${pair%-*}"
+          arch="${pair#*-}"
+          asset="locrest-server-${os}-${arch}"
+          echo "building ${asset}"
+          CGO_ENABLED=0 GOOS="${os}" GOARCH="${arch}" go build -ldflags="-s -w" -o "dist/${asset}" .
+          (cd dist && sha256sum "${asset}" > "${asset}.sha256")
+        done
+    - name: Create release
+      uses: softprops/action-gh-release@v2
+      with:
+        files: dist/*
+        generate_release_notes: true
