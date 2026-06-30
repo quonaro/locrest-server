@@ -141,26 +141,35 @@ sha256_file() {
 	fi
 }
 
-fetch_latest_version() {
+META_TAG=""
+META_COMMIT=""
+
+fetch_release_meta() {
 	local api_url="https://api.github.com/repos/$OWNER/$REPO/releases/latest"
+	local tmpfile
+	tmpfile=$(mktemp)
 	if command -v curl >/dev/null 2>&1; then
-		curl -fsSL -H "Accept: application/vnd.github.v3+json" "$api_url" 2>/dev/null | sed -n 's/.*"tag_name": *"\([^"]*\)".*/\1/p' | head -n 1
+		curl -fsSL -H "Accept: application/vnd.github.v3+json" "$api_url" > "$tmpfile" 2>/dev/null || true
 	elif command -v wget >/dev/null 2>&1; then
-		wget -qO- --header="Accept: application/vnd.github.v3+json" "$api_url" 2>/dev/null | sed -n 's/.*"tag_name": *"\([^"]*\)".*/\1/p' | head -n 1
+		wget -qO- --header="Accept: application/vnd.github.v3+json" "$api_url" > "$tmpfile" 2>/dev/null || true
 	fi
+	if [ -s "$tmpfile" ]; then
+		META_TAG=$(sed -n 's/.*"tag_name": *"\([^"]*\)".*/\1/p' "$tmpfile" | head -n 1)
+		META_COMMIT=$(sed -n 's/.*"target_commitish": *"\([^"]*\)".*/\1/p' "$tmpfile" | head -n 1)
+	fi
+	rm -f "$tmpfile"
 }
 
 download_binary() {
 	if [ "$VERSION" = "latest" ]; then
-		VERSION=$(fetch_latest_version)
-		[ -z "$VERSION" ] && error "could not determine latest release version"
+		VERSION="${META_TAG:-latest}"
+		[ -z "$META_TAG" ] && error "could not determine latest release version"
 	fi
 	local base_url="https://github.com/$OWNER/$REPO/releases/download/$VERSION"
 	local tmp_dir asset candidate err
 	tmp_dir=$(mktemp -d)
 	asset="$BIN_NAME-$OS-$ARCH"
 	err="$tmp_dir/download.err"
-	info "detected platform: $OS/$ARCH"
 	info "downloading $asset"
 	if try_download "$base_url/$asset" "$tmp_dir/$asset" "$err"; then BIN_TMP="$tmp_dir/$asset"
 	elif try_download "$base_url/$asset.tar.gz" "$tmp_dir/$asset.tar.gz" "$err"; then
@@ -374,18 +383,23 @@ enable_start_service() {
 }
 
 banner() {
+	local ver="$1" commit="$2" plat="$3" init="$4"
 	printf "${BLUE}"
 	printf '+-----------------------------------+\n'
 	printf '|  Locrest Server Installer         |\n'
 	printf '+-----------------------------------+\n'
 	printf "${NC}\n"
+	printf "  %s (%s)  %s  %s\n\n" "$ver" "$commit" "$plat" "$init"
 }
 
 main() {
-	banner
-	info "version: $VERSION"
 	detect_platform
 	detect_init
+	if [ "$VERSION" = "latest" ]; then
+		fetch_release_meta
+		VERSION="${META_TAG:-latest}"
+	fi
+	banner "$VERSION" "${META_COMMIT:-unknown}" "$OS/$ARCH" "$INIT_SYSTEM"
 	require_root
 	if is_installed; then
 		if prompt_reinstall; then
