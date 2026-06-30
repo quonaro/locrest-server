@@ -25,6 +25,13 @@ func newRateLimiter(limit int, window time.Duration) *rateLimiter {
 	}
 }
 
+func (rl *rateLimiter) reconfigure(limit int, window time.Duration) {
+	rl.mu.Lock()
+	defer rl.mu.Unlock()
+	rl.limit = limit
+	rl.window = window
+}
+
 func (rl *rateLimiter) allow(ip string) bool {
 	rl.mu.Lock()
 	defer rl.mu.Unlock()
@@ -64,28 +71,35 @@ func (rl *rateLimiter) cleanup() {
 	}
 }
 
-func securityHeaders(next http.Handler, tls bool, custom map[string]string) http.Handler {
+func (f *Frontend) securityHeaders(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("X-Content-Type-Options", "nosniff")
 		w.Header().Set("X-Frame-Options", "DENY")
-		if tls {
+		if r.TLS != nil {
 			w.Header().Set("Strict-Transport-Security", "max-age=31536000; includeSubDomains")
 		}
-		for k, v := range custom {
-			w.Header().Set(k, v)
+		if cfg := f.cfg.Load(); cfg != nil {
+			for k, v := range cfg.CustomHeaders {
+				w.Header().Set(k, v)
+			}
 		}
 		next.ServeHTTP(w, r)
 	})
 }
 
-func ipFilterMiddleware(next http.Handler, allowed, blocked []string, behindProxy bool) http.Handler {
+func (f *Frontend) ipFilterMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		ip := clientIP(r, behindProxy)
-		if len(allowed) > 0 && !ipAllowed(ip, allowed) {
+		cfg := f.cfg.Load()
+		if cfg == nil {
+			next.ServeHTTP(w, r)
+			return
+		}
+		ip := clientIP(r, cfg.BehindProxy)
+		if len(cfg.AllowedIPs) > 0 && !ipAllowed(ip, cfg.AllowedIPs) {
 			http.Error(w, "Forbidden", http.StatusForbidden)
 			return
 		}
-		if len(blocked) > 0 && ipAllowed(ip, blocked) {
+		if len(cfg.BlockedIPs) > 0 && ipAllowed(ip, cfg.BlockedIPs) {
 			http.Error(w, "Forbidden", http.StatusForbidden)
 			return
 		}

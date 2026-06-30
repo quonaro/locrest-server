@@ -18,4 +18,4 @@ jobs:
     - run: |
         VERSION="$(git describe --tags --always --dirty 2>/dev/null || echo dev)"
         COMMIT="$(git rev-parse --short HEAD 2>/dev/null || echo unknown)"
-        go build -ldflags="-s -w -X main.version=${VERSION} -X main.commit=${COMMIT}" -o locrest-server .
+        go build -ldflags="-s -w -X main.version=${VERSION} -X main.commit=${COMMIT}" -o lrs .

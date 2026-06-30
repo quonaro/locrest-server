@@ -20,10 +20,10 @@ func setupTestFS(t *testing.T) {
 	if err := os.MkdirAll(binDir, 0755); err != nil {
 		t.Fatalf("mkdir: %v", err)
 	}
-	if err := os.WriteFile(filepath.Join(binDir, "locrest-client-linux-amd64"), []byte("linux-amd64\n"), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(binDir, "lrc-linux-amd64"), []byte("linux-amd64\n"), 0644); err != nil {
 		t.Fatalf("write linux: %v", err)
 	}
-	if err := os.WriteFile(filepath.Join(binDir, "locrest-client-darwin-arm64"), []byte("darwin-arm64\n"), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(binDir, "lrc-darwin-arm64"), []byte("darwin-arm64\n"), 0644); err != nil {
 		t.Fatalf("write darwin: %v", err)
 	}
 	staticFS = os.DirFS(dir)
@@ -32,7 +32,7 @@ func setupTestFS(t *testing.T) {
 
 func TestServeBinary(t *testing.T) {
 	setupTestFS(t)
-	req := httptest.NewRequest(http.MethodGet, "/bin/locrest-client-linux-amd64", nil)
+	req := httptest.NewRequest(http.MethodGet, "/bin/lrc-linux-amd64", nil)
 	rec := httptest.NewRecorder()
 	ServeBinary(rec, req)
 
@@ -46,7 +46,7 @@ func TestServeBinary(t *testing.T) {
 	if ct := rec.Header().Get("Content-Type"); ct != "application/octet-stream" {
 		t.Fatalf("Content-Type = %q, want application/octet-stream", ct)
 	}
-	if cd := rec.Header().Get("Content-Disposition"); !strings.Contains(cd, "locrest-client-linux-amd64") {
+	if cd := rec.Header().Get("Content-Disposition"); !strings.Contains(cd, "lrc-linux-amd64") {
 		t.Fatalf("Content-Disposition = %q", cd)
 	}
 }
@@ -63,7 +63,7 @@ func TestServeBinaryNotFound(t *testing.T) {
 
 func TestServeChecksum(t *testing.T) {
 	setupTestFS(t)
-	req := httptest.NewRequest(http.MethodGet, "/bin/locrest-client-linux-amd64.sha256", nil)
+	req := httptest.NewRequest(http.MethodGet, "/bin/lrc-linux-amd64.sha256", nil)
 	rec := httptest.NewRecorder()
 	ServeChecksum(rec, req)
 
@@ -94,7 +94,7 @@ func TestServeChecksumNotFound(t *testing.T) {
 func TestNewHandlerRedirect(t *testing.T) {
 	setupTestFS(t)
 	handler := NewHandler(false, "https://cdn.example.com/bin")
-	req := httptest.NewRequest(http.MethodGet, "/bin/locrest-client-linux-amd64", nil)
+	req := httptest.NewRequest(http.MethodGet, "/bin/lrc-linux-amd64", nil)
 	rec := httptest.NewRecorder()
 	handler(rec, req)
 
@@ -102,7 +102,7 @@ func TestNewHandlerRedirect(t *testing.T) {
 		t.Fatalf("status = %d, want 307", rec.Code)
 	}
 	loc := rec.Header().Get("Location")
-	want := "https://cdn.example.com/bin/locrest-client-linux-amd64"
+	want := "https://cdn.example.com/bin/lrc-linux-amd64"
 	if loc != want {
 		t.Fatalf("Location = %q, want %q", loc, want)
 	}
@@ -111,7 +111,7 @@ func TestNewHandlerRedirect(t *testing.T) {
 func TestNewHandlerServeBinary(t *testing.T) {
 	setupTestFS(t)
 	handler := NewHandler(true, "")
-	req := httptest.NewRequest(http.MethodGet, "/bin/locrest-client-darwin-arm64", nil)
+	req := httptest.NewRequest(http.MethodGet, "/bin/lrc-darwin-arm64", nil)
 	rec := httptest.NewRecorder()
 	handler(rec, req)
 
@@ -126,7 +126,7 @@ func TestNewHandlerServeBinary(t *testing.T) {
 func TestNewHandlerServeChecksum(t *testing.T) {
 	setupTestFS(t)
 	handler := NewHandler(true, "")
-	req := httptest.NewRequest(http.MethodGet, "/bin/locrest-client-darwin-arm64.sha256", nil)
+	req := httptest.NewRequest(http.MethodGet, "/bin/lrc-darwin-arm64.sha256", nil)
 	rec := httptest.NewRecorder()
 	handler(rec, req)
 

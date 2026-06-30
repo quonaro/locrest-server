@@ -20,22 +20,8 @@ import (
 	"locrest-server/internal/config"
 	"locrest-server/internal/db"
 	"locrest-server/internal/embedbin"
+	"locrest-server/internal/logger"
 )
-
-func initLogLevel(level string) {
-	var lv slog.Level
-	switch strings.ToLower(level) {
-	case "debug":
-		lv = slog.LevelDebug
-	case "warn":
-		lv = slog.LevelWarn
-	case "error":
-		lv = slog.LevelError
-	default:
-		lv = slog.LevelInfo
-	}
-	slog.SetLogLoggerLevel(lv)
-}
 
 var (
 	portPathRegex  = regexp.MustCompile(`^/(\d+)$`)
@@ -45,11 +31,13 @@ var (
 // Frontend is the public HTTP/HTTPS server that dispenses scripts,
 // handles challenge-response, and reverse-proxies traffic into active tunnels.
 type Frontend struct {
-	cfg    *config.ServerConfig
-	store  *auth.Store
-	chisel *chiselwrapper.Chisel
-	db     *db.DB
-	mu     sync.RWMutex
+	cfg             atomic.Pointer[config.ServerConfig]
+	configPath      string
+	adminSocketPath string
+	store           *auth.Store
+	chisel          *chiselwrapper.Chisel
+	db              *db.DB
+	mu              sync.RWMutex
 	// subdomain -> backend port
 	routes                map[string]int
 	nextPort              atomic.Uint32
@@ -60,9 +48,10 @@ type Frontend struct {
 }
 
 // NewFrontend creates the HTTP frontend.
-func NewFrontend(cfg *config.ServerConfig, store *auth.Store, chisel *chiselwrapper.Chisel, database *db.DB) *Frontend {
-	return &Frontend{
-		cfg:                   cfg,
+func NewFrontend(cfg *config.ServerConfig, store *auth.Store, chisel *chiselwrapper.Chisel, database *db.DB, configPath string, adminSocketPath string) *Frontend {
+	f := &Frontend{
+		configPath:            configPath,
+		adminSocketPath:       adminSocketPath,
 		store:                 store,
 		chisel:                chisel,
 		db:                    database,
@@ -71,6 +60,8 @@ func NewFrontend(cfg *config.ServerConfig, store *auth.Store, chisel *chiselwrap
 		regenerateRateLimiter: newRateLimiter(cfg.RegenerateRateLimit.Requests, cfg.RegenerateRateLimit.Window),
 		tcpListeners:          make(map[int]net.Listener),
 	}
+	f.cfg.Store(cfg)
+	return f
 }
 
 // effectiveBinaryURL returns the URL used for client binaries. In dev mode
@@ -78,23 +69,28 @@ func NewFrontend(cfg *config.ServerConfig, store *auth.Store, chisel *chiselwrap
 // In production it returns the configured binary_url, falling back to the
 // default client release URL when none is set.
 func (f *Frontend) effectiveBinaryURL() string {
-	if f.cfg.Dev {
+	cfg := f.cfg.Load()
+	if cfg == nil {
+		return config.DefaultBinaryURL
+	}
+	if cfg.Dev {
 		return ""
 	}
-	if f.cfg.BinaryURL != "" {
-		return f.cfg.BinaryURL
+	if cfg.BinaryURL != "" {
+		return cfg.BinaryURL
 	}
 	return config.DefaultBinaryURL
 }
 
 // Run starts the HTTP/HTTPS frontend and blocks.
 func (f *Frontend) Run(ctx context.Context) error {
-	initLogLevel(f.cfg.LogLevel)
+	cfg := f.cfg.Load()
+	logger.ReloadLevel(cfg.LogLevel)
 
 	mux := http.NewServeMux()
 	mux.Handle("/tunnel", f.chisel.Handler())
 	mux.Handle("/tunnel/", f.chisel.Handler())
-	mux.HandleFunc("/bin/", embedbin.NewHandler(f.cfg.Dev, f.effectiveBinaryURL()))
+	mux.HandleFunc("/bin/", embedbin.NewHandler(cfg.Dev, f.effectiveBinaryURL()))
 	mux.HandleFunc("/register", f.handleRegister)
 	mux.HandleFunc("/regenerate", f.handleRegenerate)
 	mux.HandleFunc("/", f.handler)
@@ -105,40 +101,40 @@ func (f *Frontend) Run(ctx context.Context) error {
 	}
 	tlsEnabled := tlsConfig != nil
 
-	handler := securityHeaders(mux, tlsEnabled, f.cfg.CustomHeaders)
-	handler = ipFilterMiddleware(handler, f.cfg.AllowedIPs, f.cfg.BlockedIPs, f.cfg.BehindProxy)
+	handler := f.securityHeaders(mux)
+	handler = f.ipFilterMiddleware(handler)
 
 	var primary *http.Server
 	var insecureSrv *http.Server
 	if tlsEnabled {
 		primary = &http.Server{
-			Addr:      fmt.Sprintf(":%d", f.cfg.HTTPSPort),
+			Addr:      fmt.Sprintf(":%d", cfg.HTTPSPort),
 			Handler:   handler,
 			TLSConfig: tlsConfig,
 		}
-		if f.cfg.Insecure {
-			if f.cfg.HTTPToHTTPSRedirect {
-				insecureSrv = &http.Server{Addr: fmt.Sprintf(":%d", f.cfg.HTTPPort), Handler: redirectToHTTPS(f.cfg.HTTPSPort)}
+		if cfg.Insecure {
+			if cfg.HTTPToHTTPSRedirect {
+				insecureSrv = &http.Server{Addr: fmt.Sprintf(":%d", cfg.HTTPPort), Handler: redirectToHTTPS(cfg.HTTPSPort)}
 			} else {
-				insecureSrv = &http.Server{Addr: fmt.Sprintf(":%d", f.cfg.HTTPPort), Handler: handler}
+				insecureSrv = &http.Server{Addr: fmt.Sprintf(":%d", cfg.HTTPPort), Handler: handler}
 			}
 		}
 	} else {
 		primary = &http.Server{
-			Addr:    fmt.Sprintf(":%d", f.cfg.HTTPPort),
+			Addr:    fmt.Sprintf(":%d", cfg.HTTPPort),
 			Handler: handler,
 		}
 	}
 
 	adminMux := f.adminMux()
 	adminSrv := &http.Server{Handler: adminMux}
-	_ = os.Remove(f.cfg.AdminSocketPath)
-	adminLn, err := net.Listen("unix", f.cfg.AdminSocketPath)
+	_ = os.Remove(f.adminSocketPath)
+	adminLn, err := net.Listen("unix", f.adminSocketPath)
 	if err != nil {
 		return fmt.Errorf("admin socket: %w", err)
 	}
 	defer adminLn.Close()
-	if err := os.Chmod(f.cfg.AdminSocketPath, 0600); err != nil {
+	if err := os.Chmod(f.adminSocketPath, 0600); err != nil {
 		return fmt.Errorf("admin socket chmod: %w", err)
 	}
 	go func() {
@@ -189,6 +185,26 @@ func (f *Frontend) Run(ctx context.Context) error {
 	}
 }
 
+func (f *Frontend) reloadConfig() error {
+	if f.configPath == "" {
+		return fmt.Errorf("no config path set")
+	}
+	newCfg, err := config.Load(f.configPath)
+	if err != nil {
+		return fmt.Errorf("load config: %w", err)
+	}
+	if err := newCfg.Validate(); err != nil {
+		return fmt.Errorf("validate config: %w", err)
+	}
+	oldCfg := f.cfg.Swap(newCfg)
+	logger.ReloadLevel(newCfg.LogLevel)
+	f.rateLimiter.reconfigure(newCfg.RateLimit.Requests, newCfg.RateLimit.Window)
+	f.regenerateRateLimiter.reconfigure(newCfg.RegenerateRateLimit.Requests, newCfg.RegenerateRateLimit.Window)
+	slog.Info("config reloaded", "path", f.configPath)
+	_ = oldCfg
+	return nil
+}
+
 func (f *Frontend) handler(w http.ResponseWriter, r *http.Request) {
 	path := r.URL.Path
 
@@ -215,11 +231,12 @@ func (f *Frontend) handler(w http.ResponseWriter, r *http.Request) {
 	if !isAuthenticated(r, f.db) {
 		role = "public"
 	}
+	cfg := f.cfg.Load()
 	var perms config.Permissions
 	if role == "public" {
-		perms = f.cfg.Permissions.Public
+		perms = cfg.Permissions.Public
 	} else {
-		perms = f.cfg.Permissions.Auth
+		perms = cfg.Permissions.Auth
 	}
 
 	if m := portPathRegex.FindStringSubmatch(path); m != nil && r.Method == http.MethodGet {
@@ -242,7 +259,7 @@ func (f *Frontend) handler(w http.ResponseWriter, r *http.Request) {
 		f.handleChallenge(w, r)
 		return
 	}
-	if path == "/status" && f.cfg.StatusEndpoint {
+	if path == "/status" && cfg.StatusEndpoint {
 		f.handleStatus(w, r)
 		return
 	}

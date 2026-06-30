@@ -3,7 +3,6 @@ package cli
 import (
 	"context"
 	"fmt"
-	"log/slog"
 	"net"
 	"net/http"
 	"os"
@@ -11,6 +10,8 @@ import (
 
 	"locrest-server/internal/config"
 	"locrest-server/internal/db"
+
+	"github.com/quonaro/lota/engine"
 )
 
 const defaultConfigPath = "locrest.yaml"
@@ -20,6 +21,13 @@ func configPath() string {
 		return p
 	}
 	return defaultConfigPath
+}
+
+func adminSocketPath() string {
+	if p := os.Getenv("LOCREST_ADMIN_SOCKET"); p != "" {
+		return p
+	}
+	return "locrest-admin.sock"
 }
 
 func loadConfig(path string) (*config.ServerConfig, error) {
@@ -54,19 +62,17 @@ func adminClient(socketPath string) *http.Client {
 	}
 }
 
-func initLogLevel(level string) {
-	var lv slog.Level
-	switch level {
-	case "debug":
-		lv = slog.LevelDebug
-	case "info":
-		lv = slog.LevelInfo
-	case "warn":
-		lv = slog.LevelWarn
-	case "error":
-		lv = slog.LevelError
-	default:
-		lv = slog.LevelInfo
+// SoftReload triggers a config reload via the admin socket.
+func SoftReload(ctx context.Context, nctx engine.NativeContext) error {
+	client := adminClient(adminSocketPath())
+	resp, err := client.Post("http://admin/reload", "", nil)
+	if err != nil {
+		return fmt.Errorf("admin request failed: %w", err)
 	}
-	slog.SetDefault(slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: lv})))
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusNoContent {
+		return fmt.Errorf("reload failed: %s", resp.Status)
+	}
+	fmt.Println("Config reloaded successfully")
+	return nil
 }

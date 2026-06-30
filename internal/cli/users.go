@@ -32,7 +32,7 @@ func UserAdd(ctx context.Context, nctx engine.NativeContext) error {
 	}
 	req.Header.Set("Content-Type", "application/json")
 
-	client := adminClient(cfg.AdminSocketPath)
+	client := adminClient(adminSocketPath())
 	resp, err := client.Do(req)
 	if err != nil {
 		return fmt.Errorf("admin request failed: %w", err)
@@ -95,17 +95,12 @@ func UserDelete(ctx context.Context, nctx engine.NativeContext) error {
 		return fmt.Errorf("username is required")
 	}
 
-	cfg, err := loadConfig(configPath())
-	if err != nil {
-		return err
-	}
-
 	req, err := http.NewRequestWithContext(ctx, http.MethodDelete, fmt.Sprintf("http://unix/users/%s", username), nil)
 	if err != nil {
 		return fmt.Errorf("build request: %w", err)
 	}
 
-	client := adminClient(cfg.AdminSocketPath)
+	client := adminClient(adminSocketPath())
 	resp, err := client.Do(req)
 	if err != nil {
 		return fmt.Errorf("admin request failed: %w", err)
@@ -132,17 +127,12 @@ func UserRegenerate(ctx context.Context, nctx engine.NativeContext) error {
 		return fmt.Errorf("username is required")
 	}
 
-	cfg, err := loadConfig(configPath())
-	if err != nil {
-		return err
-	}
-
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, fmt.Sprintf("http://unix/users/%s/regenerate", username), nil)
 	if err != nil {
 		return fmt.Errorf("build request: %w", err)
 	}
 
-	client := adminClient(cfg.AdminSocketPath)
+	client := adminClient(adminSocketPath())
 	resp, err := client.Do(req)
 	if err != nil {
 		return fmt.Errorf("admin request failed: %w", err)
@@ -179,17 +169,12 @@ func UserShow(ctx context.Context, nctx engine.NativeContext) error {
 		return fmt.Errorf("username is required")
 	}
 
-	cfg, err := loadConfig(configPath())
-	if err != nil {
-		return err
-	}
-
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, fmt.Sprintf("http://unix/users/%s", username), nil)
 	if err != nil {
 		return fmt.Errorf("build request: %w", err)
 	}
 
-	client := adminClient(cfg.AdminSocketPath)
+	client := adminClient(adminSocketPath())
 	resp, err := client.Do(req)
 	if err != nil {
 		return fmt.Errorf("admin request failed: %w", err)
@@ -221,17 +206,12 @@ func UserShow(ctx context.Context, nctx engine.NativeContext) error {
 
 // UserList prints all users.
 func UserList(ctx context.Context, nctx engine.NativeContext) error {
-	cfg, err := loadConfig(configPath())
-	if err != nil {
-		return err
-	}
-
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, "http://unix/users", nil)
 	if err != nil {
 		return fmt.Errorf("build request: %w", err)
 	}
 
-	client := adminClient(cfg.AdminSocketPath)
+	client := adminClient(adminSocketPath())
 	resp, err := client.Do(req)
 	if err != nil {
 		return fmt.Errorf("admin request failed: %w", err)

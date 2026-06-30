@@ -3,6 +3,7 @@ package server
 import (
 	"bytes"
 	"crypto/ed25519"
+	"crypto/tls"
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
@@ -43,7 +44,7 @@ func newTestFrontend(t *testing.T, cfg *config.ServerConfig) *Frontend {
 	if err != nil {
 		t.Fatalf("new chisel: %v", err)
 	}
-	return NewFrontend(cfg, store, chisel, database)
+	return NewFrontend(cfg, store, chisel, database, "", "locrest-admin.sock")
 }
 
 func TestNextServerPort(t *testing.T) {
@@ -102,7 +103,9 @@ func TestIsPortInUse(t *testing.T) {
 
 func TestIsReservedSubdomain(t *testing.T) {
 	f := newTestFrontend(t, nil)
-	f.cfg.ReservedSubdomains = []string{"www", "api"}
+	tmp := *f.cfg.Load()
+	tmp.ReservedSubdomains = []string{"www", "api"}
+	f.cfg.Store(&tmp)
 	if !f.isReservedSubdomain("www") {
 		t.Fatal("www should be reserved")
 	}
@@ -113,15 +116,19 @@ func TestIsReservedSubdomain(t *testing.T) {
 
 func TestIsAllowedTunnelHost(t *testing.T) {
 	f := newTestFrontend(t, nil)
-	f.cfg.AllowedTunnelHosts = []string{"localhost", "127.0.0.1"}
+	tmp := *f.cfg.Load()
+	tmp.AllowedTunnelHosts = []string{"localhost", "127.0.0.1"}
+	f.cfg.Store(&tmp)
 	if !f.isAllowedTunnelHost("localhost") {
 		t.Fatal("localhost should be allowed")
 	}
 	if f.isAllowedTunnelHost("example.com") {
 		t.Fatal("example.com should not be allowed")
 	}
-	f.cfg.AllowedTunnelHosts = nil
-	f.cfg.BlockedTunnelHosts = []string{"bad.example.com"}
+	tmp2 := *f.cfg.Load()
+	tmp2.AllowedTunnelHosts = nil
+	tmp2.BlockedTunnelHosts = []string{"bad.example.com"}
+	f.cfg.Store(&tmp2)
 	if f.isAllowedTunnelHost("bad.example.com") {
 		t.Fatal("blocked host should not be allowed")
 	}
@@ -131,11 +138,16 @@ func TestIsAllowedTunnelHost(t *testing.T) {
 }
 
 func TestSecurityHeaders(t *testing.T) {
+	cfg := config.DefaultConfig()
+	cfg.CustomHeaders = map[string]string{"X-Custom": "yes"}
+	f := NewFrontend(cfg, nil, nil, nil, "", "")
+
 	next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	})
-	h := securityHeaders(next, true, map[string]string{"X-Custom": "yes"})
+	h := f.securityHeaders(next)
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	req.TLS = &tls.ConnectionState{}
 	rec := httptest.NewRecorder()
 	h.ServeHTTP(rec, req)
 	if rec.Code != http.StatusOK {
@@ -188,24 +200,30 @@ func TestIPFilterMiddleware(t *testing.T) {
 	})
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
 	req.RemoteAddr = "192.168.1.10:1234"
-	rec := httptest.NewRecorder()
 
-	h := ipFilterMiddleware(next, []string{"192.168.1.0/24"}, nil, false)
-	h.ServeHTTP(rec, req)
+	cfg1 := config.DefaultConfig()
+	cfg1.AllowedIPs = []string{"192.168.1.0/24"}
+	f1 := NewFrontend(cfg1, nil, nil, nil, "", "")
+	rec := httptest.NewRecorder()
+	f1.ipFilterMiddleware(next).ServeHTTP(rec, req)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status = %d", rec.Code)
 	}
 
-	h2 := ipFilterMiddleware(next, []string{"10.0.0.0/8"}, nil, false)
+	cfg2 := config.DefaultConfig()
+	cfg2.AllowedIPs = []string{"10.0.0.0/8"}
+	f2 := NewFrontend(cfg2, nil, nil, nil, "", "")
 	rec2 := httptest.NewRecorder()
-	h2.ServeHTTP(rec2, req)
+	f2.ipFilterMiddleware(next).ServeHTTP(rec2, req)
 	if rec2.Code != http.StatusForbidden {
 		t.Fatalf("status = %d, want 403", rec2.Code)
 	}
 
-	h3 := ipFilterMiddleware(next, nil, []string{"192.168.1.0/24"}, false)
+	cfg3 := config.DefaultConfig()
+	cfg3.BlockedIPs = []string{"192.168.1.0/24"}
+	f3 := NewFrontend(cfg3, nil, nil, nil, "", "")
 	rec3 := httptest.NewRecorder()
-	h3.ServeHTTP(rec3, req)
+	f3.ipFilterMiddleware(next).ServeHTTP(rec3, req)
 	if rec3.Code != http.StatusForbidden {
 		t.Fatalf("status = %d, want 403", rec3.Code)
 	}
@@ -346,7 +364,9 @@ func TestEffectiveBinaryURL(t *testing.T) {
 
 func TestHandleScriptMaxSessions(t *testing.T) {
 	f := newTestFrontend(t, nil)
-	f.cfg.MaxSessions = 1
+	tmp := *f.cfg.Load()
+	tmp.MaxSessions = 1
+	f.cfg.Store(&tmp)
 	if _, err := f.store.Create(8080, 30001, "localhost", time.Hour, false, 8, "http", "public", "", "", nil, ""); err != nil {
 		t.Fatalf("create session: %v", err)
 	}
@@ -773,8 +793,10 @@ func TestBuildTLSConfigBYO(t *testing.T) {
 	if err := generateTestCert(certPath, keyPath); err != nil {
 		t.Fatalf("generate cert: %v", err)
 	}
-	f.cfg.TLS.Cert = certPath
-	f.cfg.TLS.Key = keyPath
+	tmp := *f.cfg.Load()
+	tmp.TLS.Cert = certPath
+	tmp.TLS.Key = keyPath
+	f.cfg.Store(&tmp)
 	cfg, err := f.buildTLSConfig()
 	if err != nil {
 		t.Fatalf("buildTLSConfig: %v", err)
@@ -800,8 +822,10 @@ func TestBuildTLSConfigDisabled(t *testing.T) {
 
 func TestBuildTLSConfigMissingFiles(t *testing.T) {
 	f := newTestFrontend(t, nil)
-	f.cfg.TLS.Cert = "/nonexistent/cert.pem"
-	f.cfg.TLS.Key = "/nonexistent/key.pem"
+	tmp := *f.cfg.Load()
+	tmp.TLS.Cert = "/nonexistent/cert.pem"
+	tmp.TLS.Key = "/nonexistent/key.pem"
+	f.cfg.Store(&tmp)
 	if _, err := f.buildTLSConfig(); err == nil {
 		t.Fatal("expected error for missing cert files")
 	}
@@ -842,7 +866,9 @@ func TestHandlerStatusEndpoint(t *testing.T) {
 
 func TestHandlerStatusEndpointDisabled(t *testing.T) {
 	f := newTestFrontend(t, nil)
-	f.cfg.StatusEndpoint = false
+	tmp := *f.cfg.Load()
+	tmp.StatusEndpoint = false
+	f.cfg.Store(&tmp)
 	req := httptest.NewRequest(http.MethodGet, "/status", nil)
 	req.Host = "sub.localtest.me"
 	rec := httptest.NewRecorder()

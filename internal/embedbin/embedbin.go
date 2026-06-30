@@ -31,7 +31,7 @@ func initChecksums() {
 		return
 	}
 	for _, entry := range entries {
-		if entry.IsDir() || !strings.HasPrefix(entry.Name(), "locrest-client-") {
+		if entry.IsDir() || !strings.HasPrefix(entry.Name(), "lrc-") {
 			continue
 		}
 		f, err := staticFS.Open("bin/" + entry.Name())
@@ -51,7 +51,7 @@ func initChecksums() {
 // ServeBinary serves an embedded client binary matching the requested OS/arch.
 func ServeBinary(w http.ResponseWriter, r *http.Request) {
 	fileName := path.Base(r.URL.Path)
-	if !strings.HasPrefix(fileName, "locrest-client-") {
+	if !strings.HasPrefix(fileName, "lrc-") {
 		http.NotFound(w, r)
 		return
 	}
@@ -76,7 +76,7 @@ func ServeBinary(w http.ResponseWriter, r *http.Request) {
 // ServeChecksum serves the SHA-256 hex checksum for a binary.
 func ServeChecksum(w http.ResponseWriter, r *http.Request) {
 	fileName := strings.TrimSuffix(path.Base(r.URL.Path), ".sha256")
-	if !strings.HasPrefix(fileName, "locrest-client-") {
+	if !strings.HasPrefix(fileName, "lrc-") {
 		http.NotFound(w, r)
 		return
 	}
@@ -95,7 +95,7 @@ func ServeChecksum(w http.ResponseWriter, r *http.Request) {
 func NewHandler(dev bool, binaryURL string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		fileName := path.Base(r.URL.Path)
-		if !strings.HasPrefix(fileName, "locrest-client-") {
+		if !strings.HasPrefix(fileName, "lrc-") {
 			http.NotFound(w, r)
 			return
 		}

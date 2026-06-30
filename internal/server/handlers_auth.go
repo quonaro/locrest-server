@@ -70,7 +70,8 @@ func (f *Frontend) handleRegenerate(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
-	if !f.regenerateRateLimiter.allow(clientIP(r, f.cfg.BehindProxy)) {
+	cfg := f.cfg.Load()
+	if !f.regenerateRateLimiter.allow(clientIP(r, cfg.BehindProxy)) {
 		http.Error(w, "Rate limit exceeded", http.StatusTooManyRequests)
 		return
 	}
@@ -199,11 +200,12 @@ func (f *Frontend) handleVerify(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	cfg := f.cfg.Load()
 	var perms config.Permissions
 	if sess.Role == "public" {
-		perms = f.cfg.Permissions.Public
+		perms = cfg.Permissions.Public
 	} else {
-		perms = f.cfg.Permissions.Auth
+		perms = cfg.Permissions.Auth
 	}
 	if sess.Mode == "tcp" && !perms.RawTCP {
 		f.store.Delete(sess.SetupToken)

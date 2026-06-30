@@ -11,6 +11,7 @@ import (
 
 	"locrest-server/internal/auth"
 	"locrest-server/internal/chiselwrapper"
+	"locrest-server/internal/logger"
 	"locrest-server/internal/server"
 )
 
@@ -22,7 +23,7 @@ func StartServer() error {
 		return err
 	}
 
-	initLogLevel(cfg.LogLevel)
+	logger.Setup(cfg.LogLevel)
 
 	database, err := openDB(cfg)
 	if err != nil {
@@ -41,7 +42,7 @@ func StartServer() error {
 
 	database.StartCleaner(ctx, 30*time.Second)
 
-	frontend := server.NewFrontend(cfg, store, chisel, database)
+	frontend := server.NewFrontend(cfg, store, chisel, database, configPath(), adminSocketPath())
 	frontend.ReloadChiselUsers()
 
 	sigCh := make(chan os.Signal, 1)

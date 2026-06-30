@@ -8,9 +8,10 @@ import (
 )
 
 func (f *Frontend) buildTLSConfig() (*tls.Config, error) {
-	if f.cfg.TLS.Cert != "" && f.cfg.TLS.Key != "" {
+	cfg := f.cfg.Load()
+	if cfg.TLS.Cert != "" && cfg.TLS.Key != "" {
 		slog.Info("using BYO TLS certificate")
-		cert, err := tls.LoadX509KeyPair(f.cfg.TLS.Cert, f.cfg.TLS.Key)
+		cert, err := tls.LoadX509KeyPair(cfg.TLS.Cert, cfg.TLS.Key)
 		if err != nil {
 			return nil, err
 		}
@@ -19,13 +20,13 @@ func (f *Frontend) buildTLSConfig() (*tls.Config, error) {
 		}, nil
 	}
 
-	if f.cfg.TLS.AutoTLS && len(f.cfg.TLS.Domains) > 0 {
-		slog.Info("using autocert", "domains", f.cfg.TLS.Domains)
+	if cfg.TLS.AutoTLS && len(cfg.TLS.Domains) > 0 {
+		slog.Info("using autocert", "domains", cfg.TLS.Domains)
 		m := &autocert.Manager{
 			Cache:      autocert.DirCache("locrest-certs"),
 			Prompt:     autocert.AcceptTOS,
-			HostPolicy: autocert.HostWhitelist(f.cfg.TLS.Domains...),
-			Email:      f.cfg.TLS.Email,
+			HostPolicy: autocert.HostWhitelist(cfg.TLS.Domains...),
+			Email:      cfg.TLS.Email,
 		}
 		return m.TLSConfig(), nil
 	}

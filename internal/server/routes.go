@@ -51,7 +51,8 @@ func (f *Frontend) isPortInUse(port int) bool {
 }
 
 func (f *Frontend) isReservedSubdomain(subdomain string) bool {
-	for _, r := range f.cfg.ReservedSubdomains {
+	cfg := f.cfg.Load()
+	for _, r := range cfg.ReservedSubdomains {
 		if r == subdomain {
 			return true
 		}
@@ -60,15 +61,16 @@ func (f *Frontend) isReservedSubdomain(subdomain string) bool {
 }
 
 func (f *Frontend) isAllowedTunnelHost(host string) bool {
-	if len(f.cfg.BlockedTunnelHosts) > 0 {
-		for _, b := range f.cfg.BlockedTunnelHosts {
+	cfg := f.cfg.Load()
+	if len(cfg.BlockedTunnelHosts) > 0 {
+		for _, b := range cfg.BlockedTunnelHosts {
 			if b == host {
 				return false
 			}
 		}
 	}
-	if len(f.cfg.AllowedTunnelHosts) > 0 {
-		for _, a := range f.cfg.AllowedTunnelHosts {
+	if len(cfg.AllowedTunnelHosts) > 0 {
+		for _, a := range cfg.AllowedTunnelHosts {
 			if a == host {
 				return true
 			}

@@ -4,7 +4,7 @@ set -e
 OWNER="${OWNER:-quonaro}"
 REPO="${REPO:-locrest-server}"
 VERSION="${VERSION:-latest}"
-BIN_NAME="${BIN_NAME:-locrest-server}"
+BIN_NAME="${BIN_NAME:-lrs}"
 USER_NAME="${USER_NAME:-locrest}"
 GROUP_NAME="${GROUP_NAME:-locrest}"
 INSTALL_DIR="${INSTALL_DIR:-/usr/local/bin}"
@@ -12,7 +12,7 @@ CONFIG_DIR="${CONFIG_DIR:-/etc/locrest}"
 DATA_DIR="${DATA_DIR:-/var/lib/locrest}"
 LOG_DIR="${LOG_DIR:-/var/log/locrest}"
 CONFIG_FILE="$CONFIG_DIR/locrest.yaml"
-SERVICE_NAME="locrest-server"
+SERVICE_NAME="lrs"
 INIT_SYSTEM=""
 OS=""
 ARCH=""
@@ -78,10 +78,10 @@ prompt_reinstall() {
 	if [ -n "$FORCE_REINSTALL" ]; then return 0; fi
 	local ans
 	if [ -t 0 ]; then
-		printf "locrest-server is already installed. Reinstall? [y/N]: "
+		printf "lrs is already installed. Reinstall? [y/N]: "
 		read -r ans
 	elif [ -e /dev/tty ]; then
-		printf "locrest-server is already installed. Reinstall? [y/N]: " > /dev/tty
+		printf "lrs is already installed. Reinstall? [y/N]: " > /dev/tty
 		read -r ans < /dev/tty
 	else
 		warn "already installed; use FORCE_REINSTALL=1 to skip this prompt"
@@ -243,7 +243,6 @@ setup_config() {
 	fi
 	sed -i.bak -E \
 		-e "s|^( *)db_path:.*|\1db_path: $DATA_DIR/locrest.db|" \
-		-e "s|^( *)admin_socket_path:.*|\1admin_socket_path: $DATA_DIR/locrest-admin.sock|" \
 		"$CONFIG_FILE"
 	rm -f "$CONFIG_FILE.bak"
 	chown root:"$GROUP_NAME" "$CONFIG_FILE"
@@ -262,8 +261,9 @@ User=__USER__
 Group=__GROUP__
 WorkingDirectory=__DATA_DIR__
 Environment=LOCREST_CONFIG=__CONFIG_FILE__
+Environment=LOCREST_ADMIN_SOCKET=__DATA_DIR__/locrest-admin.sock
 Environment=PATH=__INSTALL_DIR__:/usr/bin:/bin
-ExecStart=__INSTALL_DIR__/locrest-server
+ExecStart=__INSTALL_DIR__/lrs
 Restart=on-failure
 RestartSec=5
 AmbientCapabilities=CAP_NET_BIND_SERVICE
@@ -281,17 +281,18 @@ install_sysv() {
 	cat > "/etc/init.d/$SERVICE_NAME" <<'INIT'
 #!/bin/sh
 ### BEGIN INIT INFO
-# Provides: locrest-server
+# Provides: lrs
 # Required-Start: $network $remote_fs
 # Required-Stop: $network $remote_fs
 # Default-Start: 2 3 4 5
 # Default-Stop: 0 1 6
 # Short-Description: Locrest Server
 ### END INIT INFO
-DAEMON=__INSTALL_DIR__/locrest-server
-PIDFILE=/var/run/locrest-server.pid
+DAEMON=__INSTALL_DIR__/lrs
+PIDFILE=/var/run/lrs.pid
 export LOCREST_CONFIG=__CONFIG_FILE__
-start(){ cd __DATA_DIR__ || exit 1; if command -v start-stop-daemon >/dev/null 2>&1; then start-stop-daemon --start --quiet --make-pidfile --pidfile $PIDFILE --background --exec $DAEMON; else nohup $DAEMON >__LOG_DIR__/locrest-server.log 2>&1 & echo $! > $PIDFILE; fi; }
+export LOCREST_ADMIN_SOCKET=__DATA_DIR__/locrest-admin.sock
+start(){ cd __DATA_DIR__ || exit 1; if command -v start-stop-daemon >/dev/null 2>&1; then start-stop-daemon --start --quiet --make-pidfile --pidfile $PIDFILE --background --exec $DAEMON; else nohup $DAEMON >__LOG_DIR__/lrs.log 2>&1 & echo $! > $PIDFILE; fi; }
 stop(){ [ -f $PIDFILE ] && kill $(cat $PIDFILE) 2>/dev/null || true; rm -f $PIDFILE; }
 case "$1" in start) start;; stop) stop;; restart) stop; sleep 1; start;; status) [ -f $PIDFILE ] && kill -0 $(cat $PIDFILE) 2>/dev/null && echo running || echo not running;; *) echo "Usage: $0 {start|stop|restart|status}"; exit 1;; esac
 INIT
@@ -304,12 +305,13 @@ install_openrc() {
 	info "installing OpenRC service"
 	cat > "/etc/init.d/$SERVICE_NAME" <<'RC'
 #!/sbin/openrc-run
-command="__INSTALL_DIR__/locrest-server"
+command="__INSTALL_DIR__/lrs"
 command_args=""
 command_user="__USER__:__GROUP__"
 command_background=true
-pidfile="/var/run/locrest-server.pid"
+pidfile="/var/run/lrs.pid"
 export LOCREST_CONFIG="__CONFIG_FILE__"
+export LOCREST_ADMIN_SOCKET="__DATA_DIR__/locrest-admin.sock"
 directory="__DATA_DIR__"
 RC
 	sed -i.bak -e "s|__USER__|$USER_NAME|g" -e "s|__GROUP__|$GROUP_NAME|g" -e "s|__DATA_DIR__|$DATA_DIR|g" -e "s|__CONFIG_FILE__|$CONFIG_FILE|g" -e "s|__INSTALL_DIR__|$INSTALL_DIR|g" "/etc/init.d/$SERVICE_NAME"
@@ -325,16 +327,16 @@ install_freebsd() {
 # REQUIRE: NETWORKING
 # KEYWORD: shutdown
 . /etc/rc.subr
-name="locrest_server"
-rcvar="locrest_server_enable"
+name="lrs"
+rcvar="lrs_enable"
 pidfile="/var/run/${name}.pid"
 command="/usr/sbin/daemon"
-command_args="-p ${pidfile} -u __USER__ -r __INSTALL_DIR__/locrest-server"
-locrest_server_env="LOCREST_CONFIG=__CONFIG_FILE__"
+command_args="-p ${pidfile} -u __USER__ -r __INSTALL_DIR__/lrs"
+lrs_env="LOCREST_CONFIG=__CONFIG_FILE__ LOCREST_ADMIN_SOCKET=__DATA_DIR__/locrest-admin.sock LOCREST_LOG_DIR=__LOG_DIR__"
 load_rc_config $name
 run_rc_command "$1"
 BSD
-	sed -i.bak -e "s|__USER__|$USER_NAME|g" -e "s|__INSTALL_DIR__|$INSTALL_DIR|g" -e "s|__CONFIG_FILE__|$CONFIG_FILE|g" "/usr/local/etc/rc.d/${SERVICE_NAME}_"
+	sed -i.bak -e "s|__USER__|$USER_NAME|g" -e "s|__INSTALL_DIR__|$INSTALL_DIR|g" -e "s|__CONFIG_FILE__|$CONFIG_FILE|g" -e "s|__LOG_DIR__|$LOG_DIR|g" "/usr/local/etc/rc.d/${SERVICE_NAME}_"
 	rm -f "/usr/local/etc/rc.d/${SERVICE_NAME}_.bak"
 	chmod 755 "/usr/local/etc/rc.d/${SERVICE_NAME}_"
 }
@@ -345,14 +347,14 @@ install_launchd() {
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0"><dict>
-<key>Label</key><string>locrest-server</string>
-<key>ProgramArguments</key><array><string>__INSTALL_DIR__/locrest-server</string></array>
-<key>EnvironmentVariables</key><dict><key>LOCREST_CONFIG</key><string>__CONFIG_FILE__</string></dict>
+<key>Label</key><string>lrs</string>
+<key>ProgramArguments</key><array><string>__INSTALL_DIR__/lrs</string></array>
+<key>EnvironmentVariables</key><dict><key>LOCREST_CONFIG</key><string>__CONFIG_FILE__</string><key>LOCREST_ADMIN_SOCKET</key><string>__DATA_DIR__/locrest-admin.sock</string></dict>
 <key>WorkingDirectory</key><string>__DATA_DIR__</string>
 <key>RunAtLoad</key><true/>
 <key>KeepAlive</key><true/>
-<key>StandardOutPath</key><string>__LOG_DIR__/locrest-server.log</string>
-<key>StandardErrorPath</key><string>__LOG_DIR__/locrest-server.log</string>
+<key>StandardOutPath</key><string>__LOG_DIR__/lrs.log</string>
+<key>StandardErrorPath</key><string>__LOG_DIR__/lrs.log</string>
 </dict></plist>
 PLIST
 	sed -i.bak -e "s|__INSTALL_DIR__|$INSTALL_DIR|g" -e "s|__CONFIG_FILE__|$CONFIG_FILE|g" -e "s|__DATA_DIR__|$DATA_DIR|g" -e "s|__LOG_DIR__|$LOG_DIR|g" "/Library/LaunchDaemons/$SERVICE_NAME.plist"

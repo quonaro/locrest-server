@@ -76,7 +76,7 @@ case "$ARCH" in
   aarch64) ARCH=arm64 ;;
 esac
 
-BIN_NAME="locrest-client-${OS}-${ARCH}"
+BIN_NAME="lrc-${OS}-${ARCH}"
 URL="{{.BinaryURL}}/bin/${BIN_NAME}"
 CHECKSUM_URL="{{.BinaryURL}}/bin/${BIN_NAME}.sha256"
 TMP=$(mktemp)
@@ -157,7 +157,7 @@ func Generate(serverURL, binaryURL string, sess *auth.Session, ua string, flags 
 		SetupToken:  sess.SetupToken,
 		TokenTTL:    tokenTTL,
 		OS:          shellEscape(os),
-		BinaryName:  "locrest-client",
+		BinaryName:  "lrc",
 		ExtraFlags:  extra,
 		HTTPAuth:    shellEscape(sess.HTTPAuth),
 		Infinity:    infinity,

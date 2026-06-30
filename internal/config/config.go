@@ -102,7 +102,6 @@ func DefaultConfig() *ServerConfig {
 		SubdomainLength:     16,
 		LogLevel:            "info",
 		StatusEndpoint:      true,
-		AdminSocketPath:     "locrest-admin.sock",
 		Permissions: PermissionsConfig{
 			Public: Permissions{
 				CreateTunnel: true,
@@ -128,6 +127,56 @@ func DefaultConfig() *ServerConfig {
 			},
 		},
 	}
+}
+
+// Validate checks the configuration for logical errors.
+func (c *ServerConfig) Validate() error {
+	if c.HTTPPort <= 0 || c.HTTPPort > 65535 {
+		return fmt.Errorf("invalid http_port: %d", c.HTTPPort)
+	}
+	if c.HTTPSPort <= 0 || c.HTTPSPort > 65535 {
+		return fmt.Errorf("invalid https_port: %d", c.HTTPSPort)
+	}
+	if c.Domain == "" {
+		return fmt.Errorf("domain is required")
+	}
+	if c.TTL <= 0 {
+		return fmt.Errorf("ttl must be positive")
+	}
+	if c.TTLLimit < c.TTL {
+		return fmt.Errorf("ttl_limit must be >= ttl")
+	}
+	if c.SubdomainLength <= 0 {
+		return fmt.Errorf("subdomain_length must be positive")
+	}
+	if c.MaxSessions < 0 {
+		return fmt.Errorf("max_sessions must be >= 0")
+	}
+	if c.DBPath == "" {
+		return fmt.Errorf("db_path is required")
+	}
+	if c.AdminSocketPath == "" {
+		return fmt.Errorf("admin_socket_path is required")
+	}
+	if c.RateLimit.Requests < 0 {
+		return fmt.Errorf("rate_limit.requests must be >= 0")
+	}
+	if c.RateLimit.Window <= 0 {
+		return fmt.Errorf("rate_limit.window must be positive")
+	}
+	if c.RegenerateRateLimit.Requests < 0 {
+		return fmt.Errorf("regenerate_rate_limit.requests must be >= 0")
+	}
+	if c.RegenerateRateLimit.Window <= 0 {
+		return fmt.Errorf("regenerate_rate_limit.window must be positive")
+	}
+	if c.Permissions.Public.MaxTTL < 0 {
+		return fmt.Errorf("permissions.public.max_ttl must be >= 0")
+	}
+	if c.Permissions.Auth.MaxTTL < 0 {
+		return fmt.Errorf("permissions.auth.max_ttl must be >= 0")
+	}
+	return nil
 }
 
 // Load reads a YAML file (nested under `server:`).

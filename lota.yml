@@ -6,17 +6,17 @@ run:
 
     echo "[1/3] Building client binaries..."
     cd ../client
-    GOOS=linux   GOARCH=amd64 go build -ldflags="-s -w" -o ../server/${CLIENT_DIR}/locrest-client-linux-amd64 .
-    GOOS=linux   GOARCH=arm64 go build -ldflags="-s -w" -o ../server/${CLIENT_DIR}/locrest-client-linux-arm64 .
-    GOOS=darwin  GOARCH=amd64 go build -ldflags="-s -w" -o ../server/${CLIENT_DIR}/locrest-client-darwin-amd64 .
-    GOOS=darwin  GOARCH=arm64 go build -ldflags="-s -w" -o ../server/${CLIENT_DIR}/locrest-client-darwin-arm64 .
+    GOOS=linux   GOARCH=amd64 go build -ldflags="-s -w" -o ../server/${CLIENT_DIR}/lrc-linux-amd64 .
+    GOOS=linux   GOARCH=arm64 go build -ldflags="-s -w" -o ../server/${CLIENT_DIR}/lrc-linux-arm64 .
+    GOOS=darwin  GOARCH=amd64 go build -ldflags="-s -w" -o ../server/${CLIENT_DIR}/lrc-darwin-amd64 .
+    GOOS=darwin  GOARCH=arm64 go build -ldflags="-s -w" -o ../server/${CLIENT_DIR}/lrc-darwin-arm64 .
     cd ../server
 
     echo "[2/3] Building server..."
     VERSION="$(git describe --tags --always --dirty 2>/dev/null || echo dev)"
     COMMIT="$(git rev-parse --short HEAD 2>/dev/null || echo unknown)"
-    go build -ldflags="-s -w -X main.version=${VERSION} -X main.commit=${COMMIT}" -o locrest-server .
-    cp locrest-server internal/embedbin/bin/locrest-server
+    go build -ldflags="-s -w -X main.version=${VERSION} -X main.commit=${COMMIT}" -o lrs .
+    cp lrs internal/embedbin/bin/lrs
 
     echo "[3/3] Starting server..."
-    ./locrest-server
+    ./lrs

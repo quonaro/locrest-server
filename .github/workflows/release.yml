@@ -24,12 +24,12 @@ jobs:
         for pair in linux-amd64 linux-arm64 linux-arm linux-386 darwin-amd64 darwin-arm64 freebsd-amd64; do
           os="${pair%-*}"
           arch="${pair#*-}"
-          asset="locrest-server-${os}-${arch}"
+          asset="lrs-${os}-${arch}"
           echo "building ${asset}"
           CGO_ENABLED=0 GOOS="${os}" GOARCH="${arch}" go build -ldflags="-s -w -X main.version=${VERSION} -X main.commit=${COMMIT}" -o "dist/${asset}" .
           (cd dist && sha256sum "${asset}" > "${asset}.sha256")
         done
-        (cd dist && find . -maxdepth 1 -type f -name 'locrest-server-*' ! -name '*.sha256' -exec sha256sum {} + > checksums.txt)
+        (cd dist && find . -maxdepth 1 -type f -name 'lrs-*' ! -name '*.sha256' -exec sha256sum {} + > checksums.txt)
     - name: Create release
       uses: softprops/action-gh-release@v2
       with:

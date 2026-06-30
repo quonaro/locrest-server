@@ -2,6 +2,7 @@ package server
 
 import (
 	"encoding/json"
+	"log/slog"
 	"net/http"
 	"strings"
 	"time"
@@ -177,6 +178,19 @@ func (f *Frontend) handleAdminListUsers(w http.ResponseWriter, r *http.Request) 
 	json.NewEncoder(w).Encode(resp)
 }
 
+func (f *Frontend) handleAdminReload(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	if err := f.reloadConfig(); err != nil {
+		slog.Error("reload failed", "error", err)
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
 // adminMux returns the mux for the Unix socket admin API.
 func (f *Frontend) adminMux() *http.ServeMux {
 	mux := http.NewServeMux()
@@ -190,5 +204,6 @@ func (f *Frontend) adminMux() *http.ServeMux {
 		f.handleAdminUser(w, r)
 	})
 	mux.HandleFunc("/users", f.handleAdminUsers)
+	mux.HandleFunc("/reload", f.handleAdminReload)
 	return mux
 }

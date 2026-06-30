@@ -19,8 +19,9 @@ import (
 
 func (f *Frontend) proxyWebSocket(w http.ResponseWriter, r *http.Request) {
 	backendPort, subdomain, ok := f.resolveRoute(r.Host)
+	cfg := f.cfg.Load()
 	if !ok {
-		if f.cfg.RootPage && f.isRootHost(r.Host) {
+		if cfg.RootPage && f.isRootHost(r.Host) {
 			f.handleRoot(w, r)
 			return
 		}
@@ -70,7 +71,7 @@ func (f *Frontend) proxyWebSocket(w http.ResponseWriter, r *http.Request) {
 	header.Set("Host", r.Host)
 
 	uri := r.URL.RequestURI()
-	if f.cfg.StripErrorParam {
+	if cfg.StripErrorParam {
 		u := *r.URL
 		u.RawQuery = stripErrorParam(u.RawQuery)
 		uri = u.RequestURI()
@@ -107,7 +108,7 @@ func (f *Frontend) proxyWebSocket(w http.ResponseWriter, r *http.Request) {
 			if colonIdx := strings.LastIndex(host, ":"); colonIdx != -1 {
 				host = host[:colonIdx]
 			}
-			return host == f.cfg.Domain || strings.HasSuffix(host, "."+f.cfg.Domain)
+			return host == cfg.Domain || strings.HasSuffix(host, "."+cfg.Domain)
 		},
 	}
 
@@ -160,8 +161,9 @@ func (f *Frontend) proxyWebSocket(w http.ResponseWriter, r *http.Request) {
 
 func (f *Frontend) proxyTunnel(w http.ResponseWriter, r *http.Request) {
 	backendPort, subdomain, ok := f.resolveRoute(r.Host)
+	cfg := f.cfg.Load()
 	if !ok {
-		if f.cfg.RootPage && f.isRootHost(r.Host) {
+		if cfg.RootPage && f.isRootHost(r.Host) {
 			f.handleRoot(w, r)
 			return
 		}
@@ -197,7 +199,7 @@ func (f *Frontend) proxyTunnel(w http.ResponseWriter, r *http.Request) {
 		Director: func(req *http.Request) {
 			req.URL.Scheme = "http"
 			req.URL.Host = r.Host
-			if f.cfg.StripErrorParam {
+			if cfg.StripErrorParam {
 				req.URL.RawQuery = stripErrorParam(req.URL.RawQuery)
 			}
 		},

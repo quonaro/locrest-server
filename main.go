@@ -62,7 +62,7 @@ func main() {
 
 	args, showVersion := parseVersionFlag(args)
 	if showVersion {
-		fmt.Printf("locrest-server %s (commit %s)\n", version, commit)
+		fmt.Printf("lrs %s (commit %s)\n", version, commit)
 		return
 	}
 
@@ -74,12 +74,13 @@ func main() {
 		return
 	}
 
-	builder := engine.NewBuilder("locrest-server", cliYAML)
+	builder := engine.NewBuilder("lrs", cliYAML)
 	builder.RegisterNative("user.add", cli.UserAdd)
 	builder.RegisterNative("user.delete", cli.UserDelete)
 	builder.RegisterNative("user.regenerate", cli.UserRegenerate)
 	builder.RegisterNative("user.show", cli.UserShow)
 	builder.RegisterNative("user.list", cli.UserList)
+	builder.RegisterNative("soft-reload", cli.SoftReload)
 
 	app, err := builder.Build()
 	if err != nil {

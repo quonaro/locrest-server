@@ -34,11 +34,15 @@ func (f *Frontend) sendHTMLError(w http.ResponseWriter, r *http.Request, code in
 	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.WriteHeader(code)
+	var domain string
+	if cfg := f.cfg.Load(); cfg != nil {
+		domain = cfg.Domain
+	}
 	_ = errorPageTmpl.Execute(w, map[string]any{
 		"Code":    code,
 		"Title":   title,
 		"Message": message,
-		"Domain":  f.cfg.Domain,
+		"Domain":  domain,
 	})
 }
 
@@ -73,7 +77,8 @@ func (f *Frontend) checkAllowedIPs(w http.ResponseWriter, r *http.Request, subdo
 	if !ok || len(sess.AllowedIPs) == 0 {
 		return true
 	}
-	if !ipAllowed(clientIP(r, f.cfg.BehindProxy), sess.AllowedIPs) {
+	cfg := f.cfg.Load()
+	if !ipAllowed(clientIP(r, cfg.BehindProxy), sess.AllowedIPs) {
 		f.sendHTMLError(w, r, http.StatusForbidden, "Forbidden", "Access from this IP is not allowed.")
 		return false
 	}
@@ -113,13 +118,18 @@ func (f *Frontend) isRootHost(host string) bool {
 	if colonIdx := strings.LastIndex(host, ":"); colonIdx != -1 {
 		host = host[:colonIdx]
 	}
-	return host == f.cfg.Domain
+	cfg := f.cfg.Load()
+	return host == cfg.Domain
 }
 
 func (f *Frontend) handleRoot(w http.ResponseWriter, _ *http.Request) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.WriteHeader(http.StatusOK)
+	var domain string
+	if cfg := f.cfg.Load(); cfg != nil {
+		domain = cfg.Domain
+	}
 	_ = rootPageTmpl.Execute(w, map[string]any{
-		"Domain": f.cfg.Domain,
+		"Domain": domain,
 	})
 }
