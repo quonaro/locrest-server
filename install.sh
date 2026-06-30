@@ -62,6 +62,56 @@ require_root() {
 	fi
 }
 
+is_installed() {
+	if [ -f "$INSTALL_DIR/$BIN_NAME" ]; then return 0; fi
+	case "$INIT_SYSTEM" in
+		systemd) [ -f "/etc/systemd/system/$SERVICE_NAME.service" ] && return 0 ;;
+		sysv) [ -f "/etc/init.d/$SERVICE_NAME" ] && return 0 ;;
+		openrc) [ -f "/etc/init.d/$SERVICE_NAME" ] && return 0 ;;
+		freebsd) [ -f "/usr/local/etc/rc.d/${SERVICE_NAME}_" ] && return 0 ;;
+		launchd) [ -f "/Library/LaunchDaemons/$SERVICE_NAME.plist" ] && return 0 ;;
+	esac
+	return 1
+}
+
+prompt_reinstall() {
+	local ans
+	if [ -t 0 ]; then
+		printf "locrest-server is already installed. Reinstall? [y/N]: "
+		read -r ans
+	else
+		printf "locrest-server is already installed. Reinstall? [y/N]: " > /dev/tty
+		read -r ans < /dev/tty
+	fi
+	case "$ans" in
+		y|Y|yes|YES) return 0 ;;
+		*) return 1 ;;
+	esac
+}
+
+stop_existing_service() {
+	case "$INIT_SYSTEM" in
+		systemd) systemctl stop "$SERVICE_NAME.service" 2>/dev/null || true ;;
+		sysv) service "$SERVICE_NAME" stop 2>/dev/null || true ;;
+		openrc) rc-service "$SERVICE_NAME" stop 2>/dev/null || true ;;
+		freebsd) service "${SERVICE_NAME}_" stop 2>/dev/null || true ;;
+		launchd) launchctl stop "$SERVICE_NAME" 2>/dev/null || true ;;
+	esac
+}
+
+remove_existing() {
+	stop_existing_service
+	info "waiting for service to release binary..."
+	local i
+	for i in 1 2 3 4 5; do
+		if rm -f "$INSTALL_DIR/$BIN_NAME" 2>/dev/null; then break; fi
+		sleep 1
+	done
+	if [ -f "$INSTALL_DIR/$BIN_NAME" ]; then
+		error "could not remove existing binary; stop the service manually and retry"
+	fi
+}
+
 download() {
 	local url="$1" file="$2"
 	if command -v curl >/dev/null 2>&1; then curl -fsSL -o "$file" "$url"
@@ -319,6 +369,15 @@ main() {
 	detect_platform
 	detect_init
 	require_root
+	if is_installed; then
+		if prompt_reinstall; then
+			info "removing existing installation..."
+			remove_existing
+		else
+			info "installation cancelled"
+			exit 0
+		fi
+	fi
 	download_binary
 	create_user
 	install_files
