@@ -9,6 +9,31 @@ run:
   desc: Run the locrest-server
   color: magenta
   native: true
+  args:
+  - "daemon|d:bool=false"
+
+service:
+  desc: Manage system service
+  color: yellow
+  inherit_color: true
+  install:
+    desc: Install the system service
+    native: true
+  uninstall:
+    desc: Uninstall the system service
+    native: true
+  start:
+    desc: Start the service
+    native: true
+  stop:
+    desc: Stop the service
+    native: true
+  restart:
+    desc: Restart the service
+    native: true
+  status:
+    desc: Show service status
+    native: true
 
 user:
   desc: User management
