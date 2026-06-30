@@ -1,8 +1,8 @@
 #!/bin/sh
 set -e
 
-OWNER="${OWNER:-locrest}"
-REPO="${REPO:-locrest}"
+OWNER="${OWNER:-quonaro}"
+REPO="${REPO:-locrest-server}"
 VERSION="${VERSION:-latest}"
 BIN_NAME="${BIN_NAME:-locrest-server}"
 USER_NAME="${USER_NAME:-locrest}"

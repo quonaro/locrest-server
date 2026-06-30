@@ -89,7 +89,7 @@ func DefaultConfig() *ServerConfig {
 		Domain:              "localtest.me",
 		TTL:                 1 * time.Hour,
 		TTLLimit:            7 * 24 * time.Hour,
-		BinaryURL:           "https://github.com/locrest/locrest/releases/latest/download",
+		BinaryURL:           "https://github.com/quonaro/locrest-client/releases/latest/download",
 		DBPath:              "locrest.db",
 		RootPage:            true,
 		MaxSessions:         10000,
