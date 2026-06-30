@@ -19,12 +19,14 @@ jobs:
     - name: Build all binaries
       run: |
         mkdir -p dist
+        VERSION="$(git describe --tags --always --dirty 2>/dev/null || echo dev)"
+        COMMIT="$(git rev-parse --short HEAD 2>/dev/null || echo unknown)"
         for pair in linux-amd64 linux-arm64 linux-arm linux-386 darwin-amd64 darwin-arm64 freebsd-amd64; do
           os="${pair%-*}"
           arch="${pair#*-}"
           asset="locrest-server-${os}-${arch}"
           echo "building ${asset}"
-          CGO_ENABLED=0 GOOS="${os}" GOARCH="${arch}" go build -ldflags="-s -w" -o "dist/${asset}" .
+          CGO_ENABLED=0 GOOS="${os}" GOARCH="${arch}" go build -ldflags="-s -w -X main.version=${VERSION} -X main.commit=${COMMIT}" -o "dist/${asset}" .
           (cd dist && sha256sum "${asset}" > "${asset}.sha256")
         done
         (cd dist && find . -maxdepth 1 -type f -name 'locrest-server-*' ! -name '*.sha256' -exec sha256sum {} + > checksums.txt)

@@ -2,17 +2,20 @@ name: CI
 
 on:
   push:
-    branches: [main, master]
+    branches: [ main, master ]
   pull_request:
-    branches: [main, master]
+    branches: [ main, master ]
 
 jobs:
   test:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
-        with:
-          go-version-file: go.mod
-      - run: go test ./...
-      - run: go build -ldflags="-s -w" -o locrest-server .
+    - uses: actions/checkout@v4
+    - uses: actions/setup-go@v5
+      with:
+        go-version-file: go.mod
+    - run: go test ./...
+    - run: |
+        VERSION="$(git describe --tags --always --dirty 2>/dev/null || echo dev)"
+        COMMIT="$(git rev-parse --short HEAD 2>/dev/null || echo unknown)"
+        go build -ldflags="-s -w -X main.version=${VERSION} -X main.commit=${COMMIT}" -o locrest-server .

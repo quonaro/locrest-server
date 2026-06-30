@@ -38,10 +38,32 @@ func parseConfigFlag(args []string) (string, []string) {
 	return configPath, remaining
 }
 
+var (
+	version = "dev"
+	commit  = "unknown"
+)
+
+func parseVersionFlag(args []string) ([]string, bool) {
+	var remaining []string
+	for _, a := range args {
+		if a == "-v" || a == "--version" {
+			return remaining, true
+		}
+		remaining = append(remaining, a)
+	}
+	return remaining, false
+}
+
 func main() {
 	configPath, args := parseConfigFlag(os.Args[1:])
 	if configPath != "" {
 		os.Setenv("LOCREST_CONFIG", configPath)
+	}
+
+	args, showVersion := parseVersionFlag(args)
+	if showVersion {
+		fmt.Printf("locrest-server %s (commit %s)\n", version, commit)
+		return
 	}
 
 	if len(args) == 0 {

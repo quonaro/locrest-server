@@ -141,11 +141,23 @@ sha256_file() {
 	fi
 }
 
+fetch_latest_version() {
+	local api_url="https://api.github.com/repos/$OWNER/$REPO/releases/latest"
+	if command -v curl >/dev/null 2>&1; then
+		curl -fsSL -H "Accept: application/vnd.github.v3+json" "$api_url" 2>/dev/null | sed -n 's/.*"tag_name": *"\([^"]*\)".*/\1/p' | head -n 1
+	elif command -v wget >/dev/null 2>&1; then
+		wget -qO- --header="Accept: application/vnd.github.v3+json" "$api_url" 2>/dev/null | sed -n 's/.*"tag_name": *"\([^"]*\)".*/\1/p' | head -n 1
+	fi
+}
+
 download_binary() {
-	local base_url
+	local base_url display_version
 	if [ "$VERSION" = "latest" ]; then
+		display_version=$(fetch_latest_version)
+		[ -z "$display_version" ] && display_version="latest"
 		base_url="https://github.com/$OWNER/$REPO/releases/latest/download"
 	else
+		display_version="$VERSION"
 		base_url="https://github.com/$OWNER/$REPO/releases/download/$VERSION"
 	fi
 	local tmp_dir asset candidate err
@@ -153,7 +165,8 @@ download_binary() {
 	asset="$BIN_NAME-$OS-$ARCH"
 	err="$tmp_dir/download.err"
 	info "detected platform: $OS/$ARCH"
-	info "downloading $asset from $base_url"
+	info "version: $display_version"
+	info "downloading $asset"
 	if try_download "$base_url/$asset" "$tmp_dir/$asset" "$err"; then BIN_TMP="$tmp_dir/$asset"
 	elif try_download "$base_url/$asset.tar.gz" "$tmp_dir/$asset.tar.gz" "$err"; then
 		tar -xzf "$tmp_dir/$asset.tar.gz" -C "$tmp_dir"
