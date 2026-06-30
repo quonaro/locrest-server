@@ -75,13 +75,17 @@ is_installed() {
 }
 
 prompt_reinstall() {
+	if [ -n "$FORCE_REINSTALL" ]; then return 0; fi
 	local ans
 	if [ -t 0 ]; then
 		printf "locrest-server is already installed. Reinstall? [y/N]: "
 		read -r ans
-	else
+	elif [ -e /dev/tty ]; then
 		printf "locrest-server is already installed. Reinstall? [y/N]: " > /dev/tty
 		read -r ans < /dev/tty
+	else
+		warn "already installed; use FORCE_REINSTALL=1 to skip this prompt"
+		return 1
 	fi
 	case "$ans" in
 		y|Y|yes|YES) return 0 ;;
@@ -200,6 +204,7 @@ create_user() {
 install_files() {
 	info "installing binary to $INSTALL_DIR"
 	mkdir -p "$INSTALL_DIR"
+	rm -f "$INSTALL_DIR/$BIN_NAME"
 	cp "$BIN_TMP" "$INSTALL_DIR/$BIN_NAME"
 	chmod 755 "$INSTALL_DIR/$BIN_NAME"
 	mkdir -p "$CONFIG_DIR" "$DATA_DIR" "$LOG_DIR"
