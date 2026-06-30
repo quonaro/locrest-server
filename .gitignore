@@ -22,6 +22,7 @@ build-errors.log
 .DS_Store
 Thumbs.db
 
+*.sock
 # IDE
 .vscode/
 .idea/
