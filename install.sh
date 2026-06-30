@@ -151,12 +151,11 @@ fetch_latest_version() {
 }
 
 download_binary() {
-	local base_url
 	if [ "$VERSION" = "latest" ]; then
-		base_url="https://github.com/$OWNER/$REPO/releases/latest/download"
-	else
-		base_url="https://github.com/$OWNER/$REPO/releases/download/$VERSION"
+		VERSION=$(fetch_latest_version)
+		[ -z "$VERSION" ] && error "could not determine latest release version"
 	fi
+	local base_url="https://github.com/$OWNER/$REPO/releases/download/$VERSION"
 	local tmp_dir asset candidate err
 	tmp_dir=$(mktemp -d)
 	asset="$BIN_NAME-$OS-$ARCH"
@@ -182,7 +181,11 @@ download_binary() {
 		local expected actual
 		expected=$(awk '{print $1}' "$tmp_dir/checksum")
 		actual=$(sha256_file "$BIN_TMP")
-		[ "$actual" != "$expected" ] && error "checksum mismatch"
+		if [ "$actual" != "$expected" ]; then
+			warn "expected: $expected"
+			warn "actual:   $actual"
+			error "checksum mismatch"
+		fi
 		info "checksum verified"
 	else warn "no checksum file found; skipping verification"
 	fi
@@ -380,14 +383,7 @@ banner() {
 
 main() {
 	banner
-	local display_version
-	if [ "$VERSION" = "latest" ]; then
-		display_version=$(fetch_latest_version)
-		[ -z "$display_version" ] && display_version="latest"
-	else
-		display_version="$VERSION"
-	fi
-	info "version: $display_version"
+	info "version: $VERSION"
 	detect_platform
 	detect_init
 	require_root
