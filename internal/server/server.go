@@ -90,7 +90,7 @@ func (f *Frontend) Run(ctx context.Context) error {
 	mux.HandleFunc("/bin/", embedbin.NewHandler(cfg.Dev, f.effectiveBinaryURL()))
 	mux.HandleFunc("/register", f.handleRegister)
 	mux.HandleFunc("/regenerate", f.handleRegenerate)
-	mux.HandleFunc("/", f.handler)
+	mux.HandleFunc("/{path...}", f.handler)
 
 	tlsConfig, err := f.buildTLSConfig()
 	if err != nil {

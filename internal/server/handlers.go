@@ -149,8 +149,7 @@ func (f *Frontend) handleScript(w http.ResponseWriter, r *http.Request, localPor
 	flags := map[string]string{
 		"debug": r.URL.Query().Get("debug"),
 	}
-	binaryURL := f.effectiveBinaryURL()
-	scr, err := script.Generate(serverURL, binaryURL, sess, r.UserAgent(), flags, ttl, infinity)
+	scr, err := script.Generate(serverURL, sess, r.UserAgent(), flags, ttl, infinity)
 	if err != nil {
 		http.Error(w, "Script generation failed", http.StatusInternalServerError)
 		return

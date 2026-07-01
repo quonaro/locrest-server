@@ -27,7 +27,6 @@ func DetectOS(ua string) string {
 // Params contains everything needed to render the one-liner script.
 type Params struct {
 	ServerURL   string
-	BinaryURL   string
 	WSServerURL string
 	Subdomain   string
 	LocalPort   int
@@ -77,8 +76,8 @@ case "$ARCH" in
 esac
 
 BIN_NAME="lrc-${OS}-${ARCH}"
-URL="{{.BinaryURL}}/bin/${BIN_NAME}"
-CHECKSUM_URL="{{.BinaryURL}}/bin/${BIN_NAME}.sha256"
+URL="{{.ServerURL}}/bin/${BIN_NAME}"
+CHECKSUM_URL="{{.ServerURL}}/bin/${BIN_NAME}.sha256"
 TMP=$(mktemp)
 trap 'rm -f "$TMP"' EXIT
 
@@ -137,10 +136,7 @@ done
 `))
 
 // Generate returns a rendered shell script for the given session.
-func Generate(serverURL, binaryURL string, sess *auth.Session, ua string, flags map[string]string, tokenTTL time.Duration, infinity bool) (string, error) {
-	if binaryURL == "" {
-		binaryURL = serverURL
-	}
+func Generate(serverURL string, sess *auth.Session, ua string, flags map[string]string, tokenTTL time.Duration, infinity bool) (string, error) {
 	os := DetectOS(ua)
 	serverURL = strings.TrimRight(serverURL, "/")
 	extra := ""
@@ -149,7 +145,6 @@ func Generate(serverURL, binaryURL string, sess *auth.Session, ua string, flags 
 	}
 	p := Params{
 		ServerURL:   shellEscape(serverURL),
-		BinaryURL:   shellEscape(strings.TrimRight(binaryURL, "/")),
 		WSServerURL: shellEscape(wsURL(serverURL)),
 		Subdomain:   shellEscape(sess.Subdomain),
 		LocalPort:   sess.LocalPort,
