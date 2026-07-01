@@ -30,7 +30,7 @@ func TestAdminSocketPath(t *testing.T) {
 	}
 
 	os.Unsetenv("LOCREST_ADMIN_SOCKET")
-	if got := adminSocketPath(); got != "locrest-admin.sock" {
-		t.Fatalf("adminSocketPath() = %q, want locrest-admin.sock", got)
+	if got := adminSocketPath(); got != "/var/lib/locrest/locrest-admin.sock" {
+		t.Fatalf("adminSocketPath() = %q, want /var/lib/locrest/locrest-admin.sock", got)
 	}
 }

@@ -28,7 +28,7 @@ func adminSocketPath() string {
 	if p := os.Getenv("LOCREST_ADMIN_SOCKET"); p != "" {
 		return p
 	}
-	return "locrest-admin.sock"
+	return "/var/lib/locrest/locrest-admin.sock"
 }
 
 func loadConfig(path string) (*config.ServerConfig, error) {
