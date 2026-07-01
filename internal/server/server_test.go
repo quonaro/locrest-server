@@ -31,6 +31,7 @@ func newTestFrontend(t *testing.T, cfg *config.ServerConfig) *Frontend {
 		cfg.HTTPSPort = 8443
 		cfg.RootPage = true
 		cfg.StatusEndpoint = true
+		cfg.BinaryRefreshInterval = 0
 	}
 	dir := t.TempDir()
 	database, err := db.Open(filepath.Join(dir, "test.db"))

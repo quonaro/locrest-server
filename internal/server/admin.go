@@ -205,5 +205,7 @@ func (f *Frontend) adminMux() *http.ServeMux {
 	})
 	mux.HandleFunc("/users", f.handleAdminUsers)
 	mux.HandleFunc("/reload", f.handleAdminReload)
+	mux.HandleFunc("/binaries/update", f.handleAdminBinariesUpdate)
+	mux.HandleFunc("/binaries", f.handleAdminBinaries)
 	return mux
 }

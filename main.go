@@ -67,6 +67,8 @@ func buildApp() (*engine.App, error) {
 	builder.RegisterNative("user.show", cli.UserShow)
 	builder.RegisterNative("user.list", cli.UserList)
 	builder.RegisterNative("soft-reload", cli.SoftReload)
+	builder.RegisterNative("binary.list", cli.BinaryList)
+	builder.RegisterNative("binary.update", cli.BinaryUpdate)
 	return builder.Build()
 }
 

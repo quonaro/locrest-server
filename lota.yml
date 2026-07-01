@@ -2,7 +2,7 @@ run:
   desc: Build all and run locrest-server
   color: magenta
   script: |
-    CLIENT_DIR="internal/embedbin/bin"
+    CLIENT_DIR="bin"
 
     echo "[1/3] Building client binaries..."
     cd ../client
@@ -16,7 +16,6 @@ run:
     VERSION="$(git describe --tags --always --dirty 2>/dev/null || echo dev)"
     COMMIT="$(git rev-parse --short HEAD 2>/dev/null || echo unknown)"
     go build -ldflags="-s -w -X main.version=${VERSION} -X main.commit=${COMMIT}" -o lrs .
-    cp lrs internal/embedbin/bin/lrs
 
     echo "[3/3] Starting server..."
     ./lrs

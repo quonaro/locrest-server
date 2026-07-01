@@ -15,11 +15,11 @@ import (
 	"time"
 
 	"locrest-server/internal/auth"
+	"locrest-server/internal/binary"
 	tunnel "locrest-server/internal/chiselvendor/tunnel"
 	"locrest-server/internal/chiselwrapper"
 	"locrest-server/internal/config"
 	"locrest-server/internal/db"
-	"locrest-server/internal/embedbin"
 	"locrest-server/internal/logger"
 )
 
@@ -42,10 +42,12 @@ type Frontend struct {
 	regenerateRateLimiter *rateLimiter
 	// serverPort -> raw TCP listener
 	tcpListeners map[int]net.Listener
+	binCache     *binary.Cache
 }
 
 // NewFrontend creates the HTTP frontend.
 func NewFrontend(cfg *config.ServerConfig, store *auth.Store, chisel *chiselwrapper.Chisel, database *db.DB, configPath string, adminSocketPath string) *Frontend {
+	binCache := binary.NewCache(cfg.EffectiveBinaryCacheDir(), cfg.BinaryURL)
 	f := &Frontend{
 		configPath:            configPath,
 		adminSocketPath:       adminSocketPath,
@@ -56,6 +58,7 @@ func NewFrontend(cfg *config.ServerConfig, store *auth.Store, chisel *chiselwrap
 		rateLimiter:           newRateLimiter(cfg.RateLimit.Requests, cfg.RateLimit.Window),
 		regenerateRateLimiter: newRateLimiter(cfg.RegenerateRateLimit.Requests, cfg.RegenerateRateLimit.Window),
 		tcpListeners:          make(map[int]net.Listener),
+		binCache:              binCache,
 	}
 	f.cfg.Store(cfg)
 	return f
@@ -83,7 +86,7 @@ func (f *Frontend) Run(ctx context.Context) error {
 	mux := http.NewServeMux()
 	mux.Handle("/tunnel", f.chisel.Handler())
 	mux.Handle("/tunnel/", f.chisel.Handler())
-	mux.HandleFunc("/bin/", embedbin.NewHandler(f.effectiveBinaryURL()))
+	mux.HandleFunc("/bin/", binary.NewHandler(f.binCache.Dir()))
 	mux.HandleFunc("/register", f.handleRegister)
 	mux.HandleFunc("/regenerate", f.handleRegenerate)
 	mux.HandleFunc("/{path...}", f.handler)
@@ -138,6 +141,7 @@ func (f *Frontend) Run(ctx context.Context) error {
 
 	go f.startCleaner(ctx)
 	go f.startDisconnectWatcher(ctx)
+	go f.startBinaryUpdater(ctx)
 
 	slog.Info("frontend listening", "addr", primary.Addr, "tls", tlsEnabled, "insecure", insecureSrv != nil)
 

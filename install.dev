@@ -120,7 +120,7 @@ build_locally() {
 		error "go is required to build from source"
 	fi
 
-	local client_dir="internal/embedbin/bin"
+	local client_dir="bin"
 	local server_dir
 	server_dir=$(pwd)
 
@@ -141,7 +141,6 @@ build_locally() {
 	COMMIT=$(git rev-parse --short HEAD 2>/dev/null || echo unknown)
 
 	go build -ldflags="-s -w -X main.version=${VERSION} -X main.commit=${COMMIT}" -o lrs .
-	cp lrs "${client_dir}/lrs"
 	BIN_TMP="${server_dir}/lrs"
 }
 

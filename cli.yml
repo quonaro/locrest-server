@@ -1,7 +1,7 @@
 run:
   desc: Start the locrest server
-  color: green
   native: true
+  show: false
 
 user:
   desc: User management
@@ -29,4 +29,15 @@ user:
     - "username:str"
   list:
     desc: List all users
+    native: true
+
+binary:
+  desc: Client binary cache management
+  color: blue
+  inherit_color: true
+  list:
+    desc: List cached client binaries
+    native: true
+  update:
+    desc: Trigger an immediate binary cache refresh
     native: true

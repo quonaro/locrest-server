@@ -98,6 +98,25 @@ func TestLoadMissingFile(t *testing.T) {
 	}
 }
 
+func TestEffectiveBinaryCacheDir(t *testing.T) {
+	cfg := DefaultConfig()
+	want := filepath.Join(filepath.Dir(cfg.DBPath), "bin")
+	if got := cfg.EffectiveBinaryCacheDir(); got != want {
+		t.Fatalf("EffectiveBinaryCacheDir = %q, want %q", got, want)
+	}
+	cfg.BinaryCacheDir = "/custom/bin"
+	if got := cfg.EffectiveBinaryCacheDir(); got != "/custom/bin" {
+		t.Fatalf("EffectiveBinaryCacheDir = %q, want /custom/bin", got)
+	}
+}
+
+func TestBinaryRefreshIntervalDefault(t *testing.T) {
+	cfg := DefaultConfig()
+	if cfg.BinaryRefreshInterval != 24*time.Hour {
+		t.Fatalf("BinaryRefreshInterval = %v, want 24h", cfg.BinaryRefreshInterval)
+	}
+}
+
 func TestLoadIgnoresCLIArgs(t *testing.T) {
 	oldArgs := os.Args
 	defer func() { os.Args = oldArgs }()
