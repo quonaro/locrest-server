@@ -272,10 +272,16 @@ func (f *Frontend) handleVerify(w http.ResponseWriter, r *http.Request) {
 	}
 	if sess.Mode == "tcp" || sess.Mode == "tcp/udp" {
 		go func(port int, mode string) {
+			defer func() {
+				if r := recover(); r != nil {
+					slog.Error("panic in raw listener startup", "port", port, "mode", mode, "recover", r)
+				}
+			}()
 			for i := 0; i < 50; i++ {
 				if tunnel.GetProxyPipe(port, "tcp") != nil {
 					f.startTCPListener(port)
 					if mode == "tcp/udp" {
+						slog.Info("starting udp listener", "port", port)
 						f.startUDPListener(port)
 					}
 					return

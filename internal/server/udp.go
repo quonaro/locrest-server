@@ -12,6 +12,11 @@ import (
 )
 
 func (f *Frontend) startUDPListener(port int) {
+	defer func() {
+		if r := recover(); r != nil {
+			slog.Error("panic in startUDPListener", "port", port, "recover", r)
+		}
+	}()
 	addr, err := net.ResolveUDPAddr("udp", fmt.Sprintf(":%d", port))
 	if err != nil {
 		slog.Error("udp raw resolve failed", "port", port, "error", err)

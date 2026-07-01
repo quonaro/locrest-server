@@ -10,6 +10,11 @@ import (
 )
 
 func (f *Frontend) startTCPListener(port int) {
+	defer func() {
+		if r := recover(); r != nil {
+			slog.Error("panic in startTCPListener", "port", port, "recover", r)
+		}
+	}()
 	addr := fmt.Sprintf(":%d", port)
 	ln, err := net.Listen("tcp", addr)
 	if err != nil {

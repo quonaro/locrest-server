@@ -296,6 +296,11 @@ func (f *Frontend) ReloadChiselUsers() {
 			f.RegisterRoute(sess.Subdomain, sess.ServerPort)
 		case "tcp", "tcp/udp":
 			go func(port int, mode string) {
+				defer func() {
+					if r := recover(); r != nil {
+						slog.Error("panic in reload raw listener", "port", port, "mode", mode, "recover", r)
+					}
+				}()
 				for i := 0; i < 50; i++ {
 					if tunnel.GetProxyPipe(port, "tcp") != nil {
 						f.startTCPListener(port)
