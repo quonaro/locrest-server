@@ -1,7 +1,9 @@
 package cli
 
 import (
+	"bytes"
 	"context"
+	"io"
 	"os"
 	"path/filepath"
 	"testing"
@@ -55,5 +57,40 @@ func TestAdminSocketPath(t *testing.T) {
 	_ = os.Unsetenv("LOCREST_ADMIN_SOCKET")
 	if got := adminSocketPath(); got != "/var/lib/locrest/locrest-admin.sock" {
 		t.Fatalf("adminSocketPath() = %q, want /var/lib/locrest/locrest-admin.sock", got)
+	}
+}
+
+func TestShowConfig(t *testing.T) {
+	orig := os.Getenv("LOCREST_CONFIG")
+	defer func() { _ = os.Setenv("LOCREST_CONFIG", orig) }()
+
+	_ = os.Setenv("LOCREST_CONFIG", "/nonexistent/locrest.yaml")
+
+	r, w, err := os.Pipe()
+	if err != nil {
+		t.Fatalf("pipe: %v", err)
+	}
+	oldStdout := os.Stdout
+	os.Stdout = w
+
+	err = ShowConfig(context.Background(), engine.NativeContext{})
+
+	_ = w.Close()
+	os.Stdout = oldStdout
+	if err != nil {
+		t.Fatalf("ShowConfig: %v", err)
+	}
+
+	var buf bytes.Buffer
+	if _, err := io.Copy(&buf, r); err != nil {
+		t.Fatalf("read stdout: %v", err)
+	}
+	out := buf.String()
+
+	if !bytes.Contains(buf.Bytes(), []byte("network:")) {
+		t.Fatalf("output missing network section:\n%s", out)
+	}
+	if !bytes.Contains(buf.Bytes(), []byte("runtime:")) {
+		t.Fatalf("output missing runtime section:\n%s", out)
 	}
 }

@@ -5,6 +5,10 @@ init:
   args:
   - "path:str"
 
+config:
+  desc: Show the effective runtime configuration (sensitive values are redacted)
+  native: true
+
 run:
   desc: Start the locrest server
   native: true

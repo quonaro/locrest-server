@@ -151,6 +151,43 @@ func TestSave(t *testing.T) {
 	}
 }
 
+func TestRedacted(t *testing.T) {
+	cfg := DefaultConfig()
+	cfg.TLS.Key = "/etc/locrest/tls.key"
+	cfg.TLS.CertMagic.APIToken = "secret-token"
+	cfg.TLS.CertMagic.AccessKeyID = "AKIAID"
+	cfg.TLS.CertMagic.SecretAccessKey = "super-secret"
+
+	redacted := cfg.Redacted()
+
+	if redacted.TLS.Key != "[redacted]" {
+		t.Fatalf("TLS.Key = %q, want [redacted]", redacted.TLS.Key)
+	}
+	if redacted.TLS.CertMagic.APIToken != "[redacted]" {
+		t.Fatalf("CertMagic.APIToken = %q, want [redacted]", redacted.TLS.CertMagic.APIToken)
+	}
+	if redacted.TLS.CertMagic.AccessKeyID != "[redacted]" {
+		t.Fatalf("CertMagic.AccessKeyID = %q, want [redacted]", redacted.TLS.CertMagic.AccessKeyID)
+	}
+	if redacted.TLS.CertMagic.SecretAccessKey != "[redacted]" {
+		t.Fatalf("CertMagic.SecretAccessKey = %q, want [redacted]", redacted.TLS.CertMagic.SecretAccessKey)
+	}
+
+	if cfg.TLS.Key != "/etc/locrest/tls.key" {
+		t.Fatalf("original TLS.Key was modified: %q", cfg.TLS.Key)
+	}
+	if cfg.TLS.CertMagic.APIToken != "secret-token" {
+		t.Fatalf("original APIToken was modified: %q", cfg.TLS.CertMagic.APIToken)
+	}
+}
+
+func TestRedactedNil(t *testing.T) {
+	var cfg *ServerConfig
+	if cfg.Redacted() != nil {
+		t.Fatal("Redacted on nil config should return nil")
+	}
+}
+
 func TestLoadIgnoresCLIArgs(t *testing.T) {
 	oldArgs := os.Args
 	defer func() { os.Args = oldArgs }()

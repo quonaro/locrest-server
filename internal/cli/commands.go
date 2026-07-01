@@ -13,6 +13,7 @@ import (
 	"locrest-server/internal/db"
 
 	"github.com/quonaro/lota/engine"
+	"gopkg.in/yaml.v3"
 )
 
 const defaultConfigPath = "/etc/locrest/locrest.yaml"
@@ -84,6 +85,31 @@ func InitConfig(ctx context.Context, nctx engine.NativeContext) error {
 		return err
 	}
 	fmt.Printf("Config written to %s\n", path)
+	return nil
+}
+
+// ShowConfig prints the effective runtime configuration with sensitive values redacted.
+func ShowConfig(ctx context.Context, nctx engine.NativeContext) error {
+	path := configPath()
+	cfg, err := config.Load(path)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			cfg = config.DefaultConfig()
+			path = "(defaults, file not found)"
+		} else {
+			return fmt.Errorf("load config: %w", err)
+		}
+	}
+
+	redacted := cfg.Redacted()
+	b, err := yaml.Marshal(struct {
+		Server config.ServerConfig `yaml:"server"`
+	}{Server: *redacted})
+	if err != nil {
+		return fmt.Errorf("marshal config: %w", err)
+	}
+
+	fmt.Printf("# Effective configuration from %s\n%s", path, string(b))
 	return nil
 }
 
