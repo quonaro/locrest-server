@@ -190,7 +190,8 @@ func (f *Frontend) handleScript(w http.ResponseWriter, r *http.Request, localPor
 	flags := map[string]string{
 		"debug": r.URL.Query().Get("debug"),
 	}
-	scr, err := script.Generate(serverURL, insecureURL, sess, r.UserAgent(), flags, ttl, infinity, binaries)
+	daemon := r.URL.Query().Get("daemon") == "true"
+	scr, err := script.Generate(serverURL, insecureURL, sess, r.UserAgent(), flags, ttl, infinity, daemon, binaries)
 	if err != nil {
 		slog.Error("script generation failed", "ip", ip, "subdomain", sess.Subdomain, "error", err)
 		sendScriptError(w, "Script generation failed", http.StatusInternalServerError)

@@ -72,7 +72,7 @@ func TestGenerate(t *testing.T) {
 		SetupToken: "setuptoken123",
 		HTTPAuth:   "user:pass",
 	}
-	scr, err := Generate("https://example.com", "", sess, "curl/7.68.0", nil, time.Hour, false, nil)
+	scr, err := Generate("https://example.com", "", sess, "curl/7.68.0", nil, time.Hour, false, false, nil)
 	if err != nil {
 		t.Fatalf("Generate: %v", err)
 	}
@@ -106,7 +106,7 @@ func TestGenerateChecksums(t *testing.T) {
 		{Name: "lrc-linux-amd64", SHA256: "abc123deadbeef"},
 		{Name: "lrc-darwin-arm64", SHA256: "deadbeefabc123"},
 	}
-	scr, err := Generate("https://example.com", "", sess, "curl/7.68.0", nil, time.Hour, false, bins)
+	scr, err := Generate("https://example.com", "", sess, "curl/7.68.0", nil, time.Hour, false, false, bins)
 	if err != nil {
 		t.Fatalf("Generate: %v", err)
 	}
@@ -131,7 +131,7 @@ func TestGenerateDebugFlag(t *testing.T) {
 		TargetHost: "localhost",
 		SetupToken: "setuptoken123",
 	}
-	scr, err := Generate("https://example.com", "", sess, "wget/1.20.3", map[string]string{"debug": "true"}, time.Hour, false, nil)
+	scr, err := Generate("https://example.com", "", sess, "wget/1.20.3", map[string]string{"debug": "true"}, time.Hour, false, false, nil)
 	if err != nil {
 		t.Fatalf("Generate: %v", err)
 	}
@@ -151,7 +151,7 @@ func TestGenerateEscapes(t *testing.T) {
 		SetupToken: "token",
 		HTTPAuth:   "user:pass",
 	}
-	scr, err := Generate("https://example.com/path", "", sess, "", nil, 30*time.Minute, false, nil)
+	scr, err := Generate("https://example.com/path", "", sess, "", nil, 30*time.Minute, false, false, nil)
 	if err != nil {
 		t.Fatalf("Generate: %v", err)
 	}
@@ -168,7 +168,7 @@ func TestGenerateInsecureURL(t *testing.T) {
 		TargetHost: "localhost",
 		SetupToken: "setuptoken123",
 	}
-	scr, err := Generate("https://example.com", "http://example.com", sess, "curl/7.68.0", nil, time.Hour, false, nil)
+	scr, err := Generate("https://example.com", "http://example.com", sess, "curl/7.68.0", nil, time.Hour, false, false, nil)
 	if err != nil {
 		t.Fatalf("Generate: %v", err)
 	}
@@ -187,7 +187,7 @@ func TestGenerateInfinity(t *testing.T) {
 		TargetHost: "localhost",
 		SetupToken: "token",
 	}
-	scr, err := Generate("https://example.com", "", sess, "curl/7.68.0", nil, 0, true, nil)
+	scr, err := Generate("https://example.com", "", sess, "curl/7.68.0", nil, 0, true, false, nil)
 	if err != nil {
 		t.Fatalf("Generate: %v", err)
 	}
@@ -196,5 +196,30 @@ func TestGenerateInfinity(t *testing.T) {
 	}
 	if !strings.Contains(scr, "infsub") {
 		t.Fatal("script missing subdomain")
+	}
+}
+
+func TestGenerateDaemon(t *testing.T) {
+	sess := &auth.Session{
+		Subdomain:  "daemon-sub",
+		LocalPort:  8080,
+		TargetHost: "localhost",
+		SetupToken: "token",
+	}
+	scr, err := Generate("https://example.com", "", sess, "curl/7.68.0", nil, time.Hour, false, true, nil)
+	if err != nil {
+		t.Fatalf("Generate: %v", err)
+	}
+	if !strings.Contains(scr, "-supervisor") {
+		t.Fatal("daemon script should start supervisor")
+	}
+	if !strings.Contains(scr, "$BIN add") {
+		t.Fatal("daemon script should use 'add' command")
+	}
+	if !strings.Contains(scr, "list") {
+		t.Fatal("daemon script should list management commands")
+	}
+	if strings.Contains(scr, "while true") {
+		t.Fatal("daemon script should not have foreground loop")
 	}
 }

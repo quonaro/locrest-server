@@ -41,6 +41,7 @@ type Params struct {
 	ExtraFlags    string
 	HTTPAuth      string
 	Infinity      bool
+	Daemon        bool
 	Checksums     map[string]string
 }
 
@@ -136,6 +137,44 @@ export LOCREST_SETUP_TOKEN="{{.SetupToken}}"
 {{if ne .HTTPAuth ""}}
 echo "Tunnel URL: {{.ServerURL}} (Basic Auth: {{.HTTPAuth}})"
 {{end}}
+{{if .Daemon}}
+# Daemon mode: start supervisor in background, then add tunnel
+if ! "$BIN" -supervisor >/dev/null 2>&1 &
+then
+  echo "Failed to start supervisor" >&2
+  exit 1
+fi
+SUP_PID=$!
+sleep 2
+if ! kill -0 "$SUP_PID" 2>/dev/null; then
+  echo "Supervisor failed to start" >&2
+  exit 1
+fi
+
+RES=$($BIN add \
+  -server "{{.WSServerURL}}/tunnel" \
+  -port {{.LocalPort}} \
+  -subdomain "{{.Subdomain}}" \
+{{if ne .WSInsecureURL ""}}  -insecure-url "{{.WSInsecureURL}}/tunnel" \
+{{end}}{{if not .Infinity}}  -token-ttl "{{.TokenTTL}}" \
+{{end}}{{if ne .TargetHost "localhost"}}  -host "{{.TargetHost}}" \
+{{end}}{{if ne .ExtraFlags ""}}  {{.ExtraFlags}} \
+{{end}}  2>&1)
+
+if [ $? -ne 0 ]; then
+  echo "Failed to add tunnel: $RES" >&2
+  exit 1
+fi
+
+echo ""
+echo "Tunnel registered in background."
+echo ""
+echo "Manage with:"
+echo "  $BIN list              # show all tunnels"
+echo "  $BIN kill <id>         # stop a tunnel"
+echo "  $BIN status <id>       # show tunnel details"
+echo "  $BIN logs <id>         # show tunnel logs"
+{{else}}
 # Supervisor loop with exponential backoff
 BACKOFF=1
 MAX_BACKOFF=30
@@ -164,10 +203,11 @@ while true; do
     fi
   fi
 done
+{{end}}
 `))
 
 // Generate returns a rendered shell script for the given session.
-func Generate(serverURL, insecureURL string, sess *auth.Session, ua string, flags map[string]string, tokenTTL time.Duration, infinity bool, binaries []binary.FileInfo) (string, error) {
+func Generate(serverURL, insecureURL string, sess *auth.Session, ua string, flags map[string]string, tokenTTL time.Duration, infinity, daemon bool, binaries []binary.FileInfo) (string, error) {
 	os := DetectOS(ua)
 	serverURL = strings.TrimRight(serverURL, "/")
 	extra := ""
@@ -193,6 +233,7 @@ func Generate(serverURL, insecureURL string, sess *auth.Session, ua string, flag
 		ExtraFlags:  extra,
 		HTTPAuth:    shellEscape(sess.HTTPAuth),
 		Infinity:    infinity,
+		Daemon:      daemon,
 		Checksums:   checksums,
 	}
 	if insecureURL != "" {
