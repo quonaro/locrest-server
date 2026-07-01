@@ -8,7 +8,7 @@ require (
 	github.com/gorilla/websocket v1.5.3
 	github.com/jpillora/chisel v1.11.7
 	github.com/jpillora/sizestr v1.0.0
-	github.com/quonaro/lota v1.16.9
+	github.com/quonaro/lota v1.16.12
 	github.com/tyler-smith/go-bip39 v1.1.0
 	go.etcd.io/bbolt v1.5.0
 	golang.org/x/crypto v0.53.0
