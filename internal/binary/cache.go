@@ -112,11 +112,30 @@ func (c *Cache) Update(ctx context.Context) error {
 
 func (c *Cache) downloadFiles(ctx context.Context, client *http.Client, tmpDir, binName string) error {
 	binURL := c.binaryURL + "/" + binName
-	if err := downloadFile(ctx, client, binURL, filepath.Join(tmpDir, binName)); err != nil {
+	shaURL := binURL + ".sha256"
+	tmpSHAPath := filepath.Join(tmpDir, binName+".sha256")
+	if err := downloadFile(ctx, client, shaURL, tmpSHAPath); err != nil {
 		return err
 	}
-	shaURL := binURL + ".sha256"
-	if err := downloadFile(ctx, client, shaURL, filepath.Join(tmpDir, binName+".sha256")); err != nil {
+
+	// Reuse local binary if its checksum matches the remote one.
+	localBinPath := filepath.Join(c.dir, binName)
+	localSHAPath := filepath.Join(c.dir, binName+".sha256")
+	if _, err := os.Stat(localBinPath); err == nil {
+		if localSum, err := readSHA256File(localSHAPath); err == nil {
+			if remoteSum, err := readSHA256File(tmpSHAPath); err == nil && localSum == remoteSum {
+				if err := verifyFile(localBinPath, localSHAPath); err == nil {
+					if err := copyFile(localBinPath, filepath.Join(tmpDir, binName)); err != nil {
+						return fmt.Errorf("reuse local %s: %w", binName, err)
+					}
+					slog.Debug("binary reused from cache", "name", binName)
+					return nil
+				}
+			}
+		}
+	}
+
+	if err := downloadFile(ctx, client, binURL, filepath.Join(tmpDir, binName)); err != nil {
 		return err
 	}
 	return nil

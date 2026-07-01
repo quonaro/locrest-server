@@ -77,13 +77,7 @@ esac
 
 BIN_NAME="lrc-${OS}-${ARCH}"
 URL="{{.ServerURL}}/bin/${BIN_NAME}"
-TMP=$(mktemp)
-trap 'rm -f "$TMP"' EXIT
-
-if ! curl -fsSL -o "$TMP" "$URL" 2>/dev/null && ! wget -q -O "$TMP" "$URL" 2>/dev/null; then
-  echo "Failed to download client binary: $URL" >&2
-  exit 1
-fi
+SHA_URL="${URL}.sha256"
 
 # Install to a writable persistent location (handles noexec /tmp)
 CACHE_DIR="${HOME}/.cache/locrest"
@@ -91,8 +85,45 @@ if [ ! -d "$CACHE_DIR" ]; then
   mkdir -p "$CACHE_DIR"
 fi
 BIN="$CACHE_DIR/$BIN_NAME"
-cp "$TMP" "$BIN"
-chmod +x "$BIN"
+
+TMP=$(mktemp)
+trap 'rm -f "$TMP" "$TMP.sha256"' EXIT
+
+NEED_DOWNLOAD=1
+if [ -f "$BIN" ]; then
+  if curl -fsSL -o "$TMP.sha256" "$SHA_URL" 2>/dev/null || wget -q -O "$TMP.sha256" "$SHA_URL" 2>/dev/null; then
+    EXPECTED=$(awk '{print $1}' "$TMP.sha256")
+    if command -v sha256sum >/dev/null 2>&1; then
+      GOT=$(sha256sum "$BIN" | awk '{print $1}')
+    else
+      GOT=$(shasum -a 256 "$BIN" | awk '{print $1}')
+    fi
+    if [ "$GOT" = "$EXPECTED" ]; then
+      NEED_DOWNLOAD=0
+    fi
+  fi
+fi
+
+if [ "$NEED_DOWNLOAD" = "1" ]; then
+  if ! curl -fsSL -o "$TMP" "$URL" 2>/dev/null && ! wget -q -O "$TMP" "$URL" 2>/dev/null; then
+    echo "Failed to download client binary: $URL" >&2
+    exit 1
+  fi
+  if [ -f "$TMP.sha256" ]; then
+    EXPECTED=$(awk '{print $1}' "$TMP.sha256")
+    if command -v sha256sum >/dev/null 2>&1; then
+      GOT=$(sha256sum "$TMP" | awk '{print $1}')
+    else
+      GOT=$(shasum -a 256 "$TMP" | awk '{print $1}')
+    fi
+    if [ "$GOT" != "$EXPECTED" ]; then
+      echo "Binary checksum mismatch" >&2
+      exit 1
+    fi
+  fi
+  cp "$TMP" "$BIN"
+  chmod +x "$BIN"
+fi
 
 # Hide sensitive values from process listings
 export LOCREST_SUBDOMAIN="{{.Subdomain}}"

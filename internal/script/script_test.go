@@ -86,6 +86,7 @@ func TestGenerate(t *testing.T) {
 		"8080",
 		"user:pass",
 		"Basic Auth",
+		"NEED_DOWNLOAD",
 	} {
 		if !strings.Contains(scr, want) {
 			t.Fatalf("script missing %q", want)

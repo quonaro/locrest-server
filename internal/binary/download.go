@@ -60,6 +60,23 @@ func readSHA256File(path string) (string, error) {
 	return hash, nil
 }
 
+func copyFile(src, dst string) error {
+	in, err := os.Open(src)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = in.Close() }()
+	out, err := os.Create(dst)
+	if err != nil {
+		return err
+	}
+	if _, err := io.Copy(out, in); err != nil {
+		_ = out.Close()
+		return err
+	}
+	return out.Close()
+}
+
 func verifyFile(filePath, checksumPath string) error {
 	expected, err := readSHA256File(checksumPath)
 	if err != nil {
