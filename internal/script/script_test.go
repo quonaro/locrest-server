@@ -1,6 +1,8 @@
 package script
 
 import (
+	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
 	"time"
@@ -238,5 +240,47 @@ func TestGenerateDaemon(t *testing.T) {
 	}
 	if !strings.Contains(scr, "\"$BIN\" -supervisor >/dev/null 2>&1 &\nSUP_PID=$!") {
 		t.Fatal("daemon script should start supervisor in background directly")
+	}
+}
+
+func TestWriteError(t *testing.T) {
+	w := httptest.NewRecorder()
+	WriteError(w, "Permission DENIED", http.StatusForbidden)
+	if w.Code != http.StatusForbidden {
+		t.Fatalf("status = %d, want %d", w.Code, http.StatusForbidden)
+	}
+	body := w.Body.String()
+	if !strings.HasPrefix(body, "#!/bin/sh") {
+		t.Fatalf("error response must be a shell script, got: %q", body)
+	}
+	if !strings.Contains(body, "Permission DENIED") {
+		t.Fatalf("error response must contain the message, got: %q", body)
+	}
+	if !strings.Contains(body, "exit 1") {
+		t.Fatalf("error response must exit with code 1, got: %q", body)
+	}
+	ct := w.Header().Get("Content-Type")
+	if ct != "text/x-shellscript" {
+		t.Fatalf("Content-Type = %q, want text/x-shellscript", ct)
+	}
+}
+
+func TestWriteResponse(t *testing.T) {
+	w := httptest.NewRecorder()
+	WriteResponse(w, "#!/bin/sh\necho ok\n")
+	if w.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d", w.Code, http.StatusOK)
+	}
+	body := w.Body.String()
+	if !strings.HasPrefix(body, "#!/bin/sh") {
+		t.Fatalf("response body lost shebang: %q", body)
+	}
+	ct := w.Header().Get("Content-Type")
+	if ct != "text/x-shellscript" {
+		t.Fatalf("Content-Type = %q, want text/x-shellscript", ct)
+	}
+	cd := w.Header().Get("Content-Disposition")
+	if !strings.Contains(cd, "install.sh") {
+		t.Fatalf("Content-Disposition = %q, want install.sh", cd)
 	}
 }

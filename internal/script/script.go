@@ -2,6 +2,7 @@ package script
 
 import (
 	"fmt"
+	"net/http"
 	"strings"
 	"text/template"
 	"time"
@@ -265,4 +266,20 @@ func Generate(serverURL, insecureURL string, sess *auth.Session, ua string, flag
 		return "", fmt.Errorf("template: %w", err)
 	}
 	return buf.String(), nil
+}
+
+// WriteError writes a shell-script error response to w.
+// Use this for every error returned on a curl | bash endpoint so the client
+// gets a valid #!/bin/sh script instead of plain text.
+func WriteError(w http.ResponseWriter, msg string, code int) {
+	w.Header().Set("Content-Type", "text/x-shellscript")
+	w.WriteHeader(code)
+	_, _ = fmt.Fprintf(w, "#!/bin/sh\necho %q >&2\nexit 1\n", msg)
+}
+
+// WriteResponse writes a generated install script to w with the correct headers.
+func WriteResponse(w http.ResponseWriter, content string) {
+	w.Header().Set("Content-Type", "text/x-shellscript")
+	w.Header().Set("Content-Disposition", "attachment; filename=install.sh")
+	_, _ = w.Write([]byte(content))
 }

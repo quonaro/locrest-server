@@ -378,6 +378,38 @@ func TestHandleScriptMaxSessions(t *testing.T) {
 	}
 }
 
+func TestHandleScriptExternalPortPermissionDenied(t *testing.T) {
+	f := newTestFrontend(t, nil)
+	cacheDir := f.cfg.Load().EffectiveBinaryCacheDir()
+	if err := os.MkdirAll(cacheDir, 0755); err != nil {
+		t.Fatalf("mkdir cache: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(cacheDir, "lrc-linux-amd64"), []byte("dummy"), 0644); err != nil {
+		t.Fatalf("write dummy binary: %v", err)
+	}
+	req := httptest.NewRequest(http.MethodGet, "/8080?external_port=25565", nil)
+	req.Host = "localtest.me"
+	rec := httptest.NewRecorder()
+	f.handler(rec, req)
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("status = %d, want 403", rec.Code)
+	}
+	ct := rec.Header().Get("Content-Type")
+	if ct != "text/x-shellscript" {
+		t.Fatalf("Content-Type = %q, want text/x-shellscript", ct)
+	}
+	body := rec.Body.String()
+	if !strings.HasPrefix(body, "#!/bin/sh") {
+		t.Fatalf("permission denied response must be a shell script, got: %q", body)
+	}
+	if !strings.Contains(body, "Permission DENIED") {
+		t.Fatalf("error message missing, got: %q", body)
+	}
+	if !strings.Contains(body, "exit 1") {
+		t.Fatalf("error script must exit 1, got: %q", body)
+	}
+}
+
 func TestHandleChallengeAndVerify(t *testing.T) {
 	f := newTestFrontend(t, nil)
 

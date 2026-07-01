@@ -14,6 +14,15 @@ func isAuthenticated(r *http.Request, database *db.DB) bool {
 	return bearerUser(r, database) != nil
 }
 
+// roleAndPermissions returns the request role ("public" or "auth") and the
+// corresponding permissions from the server config.
+func roleAndPermissions(r *http.Request, cfg *config.ServerConfig, database *db.DB) (string, config.Permissions) {
+	if isAuthenticated(r, database) {
+		return "auth", cfg.Permissions.Auth
+	}
+	return "public", cfg.Permissions.Public
+}
+
 // effectiveTTL returns the final TTL and an infinity flag for a request considering role permissions.
 // rolePublic is true when the caller is unauthenticated. When infinity is true, ttl is meaningless.
 func effectiveTTL(r *http.Request, cfg *config.ServerConfig, rolePublic bool) (time.Duration, bool, error) {

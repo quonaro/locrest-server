@@ -20,6 +20,7 @@ import (
 	"locrest-server/internal/config"
 	"locrest-server/internal/db"
 	"locrest-server/internal/logger"
+	"locrest-server/internal/script"
 )
 
 var portPathRegex = regexp.MustCompile(`^/(\d+)$`)
@@ -212,38 +213,29 @@ func (f *Frontend) handler(w http.ResponseWriter, r *http.Request) {
 	if httpAuth == "true" {
 		user, err := auth.RandString(8)
 		if err != nil {
-			http.Error(w, "Failed to generate credentials", http.StatusInternalServerError)
+			script.WriteError(w, "Failed to generate credentials", http.StatusInternalServerError)
 			return
 		}
 		pass, err := auth.RandString(16)
 		if err != nil {
-			http.Error(w, "Failed to generate credentials", http.StatusInternalServerError)
+			script.WriteError(w, "Failed to generate credentials", http.StatusInternalServerError)
 			return
 		}
 		httpAuth = user + ":" + pass
 	} else if httpAuth != "" && !strings.Contains(httpAuth, ":") {
-		http.Error(w, "http_auth must be 'true' or 'user:pass'", http.StatusBadRequest)
+		script.WriteError(w, "http_auth must be 'true' or 'user:pass'", http.StatusBadRequest)
 		return
 	}
 
-	role := "auth"
-	if !isAuthenticated(r, f.db) {
-		role = "public"
-	}
 	cfg := f.cfg.Load()
-	var perms config.Permissions
-	if role == "public" {
-		perms = cfg.Permissions.Public
-	} else {
-		perms = cfg.Permissions.Auth
-	}
+	_, perms := roleAndPermissions(r, cfg, f.db)
 
 	if m := portPathRegex.FindStringSubmatch(path); m != nil && r.Method == http.MethodGet {
 		localPort, _ := strconv.Atoi(m[1])
 		externalPortStr := r.URL.Query().Get("external_port")
 		if externalPortStr != "" {
 			if !perms.SetExternalPort {
-				http.Error(w, "Permission DENIED", http.StatusForbidden)
+				script.WriteError(w, "Permission DENIED", http.StatusForbidden)
 				return
 			}
 			remotePort, _ := strconv.Atoi(externalPortStr)
