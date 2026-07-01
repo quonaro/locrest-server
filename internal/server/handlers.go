@@ -58,6 +58,13 @@ func (f *Frontend) handleScript(w http.ResponseWriter, r *http.Request, localPor
 		return
 	}
 
+	binaries, err := f.binCache.List()
+	if err != nil || len(binaries) == 0 {
+		slog.Warn("binary cache empty, cannot generate script", "ip", ip)
+		http.Error(w, "Client binaries not available, run 'lrs binary update'", http.StatusServiceUnavailable)
+		return
+	}
+
 	var perms config.Permissions
 	if role == "public" {
 		perms = cfg.Permissions.Public

@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
@@ -316,6 +317,13 @@ func TestEffectiveTTL(t *testing.T) {
 
 func TestHandleScript(t *testing.T) {
 	f := newTestFrontend(t, nil)
+	cacheDir := f.cfg.Load().EffectiveBinaryCacheDir()
+	if err := os.MkdirAll(cacheDir, 0755); err != nil {
+		t.Fatalf("mkdir cache: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(cacheDir, "lrc-linux-amd64"), []byte("dummy"), 0644); err != nil {
+		t.Fatalf("write dummy binary: %v", err)
+	}
 	req := httptest.NewRequest(http.MethodGet, "/8080", nil)
 	req.Host = "localtest.me"
 	rec := httptest.NewRecorder()

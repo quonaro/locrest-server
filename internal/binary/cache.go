@@ -14,9 +14,11 @@ import (
 var defaultPlatforms = []string{
 	"linux-amd64",
 	"linux-arm64",
+	"linux-386",
+	"linux-arm",
 	"darwin-amd64",
 	"darwin-arm64",
-	"windows-amd64",
+	"freebsd-amd64",
 }
 
 // FileInfo describes a cached binary.
@@ -59,16 +61,22 @@ func (c *Cache) Update(ctx context.Context) error {
 
 	client := &http.Client{Timeout: 60 * time.Second}
 
+	var downloaded []string
 	for _, plat := range c.platforms {
 		binName := "lrc-" + plat
 		if err := c.downloadPair(ctx, client, tmpDir, binName); err != nil {
-			return fmt.Errorf("download %s: %w", binName, err)
+			slog.Warn("binary download failed, skipping platform", "platform", plat, "error", err)
+			continue
 		}
+		downloaded = append(downloaded, binName)
+	}
+
+	if len(downloaded) == 0 {
+		return fmt.Errorf("no binaries could be downloaded")
 	}
 
 	// Verify every checksum before moving anything into place.
-	for _, plat := range c.platforms {
-		binName := "lrc-" + plat
+	for _, binName := range downloaded {
 		if err := verifyFile(filepath.Join(tmpDir, binName), filepath.Join(tmpDir, binName+".sha256")); err != nil {
 			return fmt.Errorf("verify %s: %w", binName, err)
 		}
@@ -89,7 +97,7 @@ func (c *Cache) Update(ctx context.Context) error {
 	}
 	_ = os.RemoveAll(oldDir)
 
-	slog.Info("binary cache updated", "dir", c.dir, "platforms", len(c.platforms))
+	slog.Info("binary cache updated", "dir", c.dir, "platforms", len(downloaded))
 	return nil
 }
 
