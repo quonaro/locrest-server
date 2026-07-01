@@ -81,7 +81,10 @@ CHECKSUM_URL="{{.ServerURL}}/bin/${BIN_NAME}.sha256"
 TMP=$(mktemp)
 trap 'rm -f "$TMP"' EXIT
 
-curl -fsSL -o "$TMP" "$URL" || wget -q -O "$TMP" "$URL"
+if ! curl -fsSL -o "$TMP" "$URL" 2>/dev/null && ! wget -q -O "$TMP" "$URL" 2>/dev/null; then
+  echo "Failed to download client binary: $URL" >&2
+  exit 1
+fi
 
 EXPECTED=$(curl -fsSL "$CHECKSUM_URL" 2>/dev/null || wget -q -O - "$CHECKSUM_URL" 2>/dev/null)
 if [ -n "$EXPECTED" ]; then

@@ -48,11 +48,16 @@ func readSHA256File(path string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	s := strings.TrimSpace(string(b))
-	if len(s) != 64 {
-		return "", fmt.Errorf("invalid checksum length: %d", len(s))
+	// Accept bare hex or sha256sum-style "HASH  filename"
+	fields := strings.Fields(string(b))
+	if len(fields) == 0 {
+		return "", fmt.Errorf("empty checksum file")
 	}
-	return s, nil
+	hash := fields[0]
+	if len(hash) != 64 {
+		return "", fmt.Errorf("invalid checksum length: %d", len(hash))
+	}
+	return hash, nil
 }
 
 func verifyFile(filePath, checksumPath string) error {

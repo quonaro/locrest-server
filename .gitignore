@@ -54,3 +54,5 @@ vendor/
 
 # Devin rules
 .devin/
+
+internal/server/bin/lrc-*
