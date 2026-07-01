@@ -165,11 +165,22 @@ func (f *Frontend) handleScript(w http.ResponseWriter, r *http.Request, localPor
 	if colonIdx := strings.LastIndex(hostOnly, ":"); colonIdx != -1 {
 		hostOnly = hostOnly[:colonIdx]
 	}
-	serverURL := fmt.Sprintf("https://%s", hostOnly)
-	if cfg.Network.HTTPSPort != 443 {
-		serverURL = fmt.Sprintf("https://%s:%d", hostOnly, cfg.Network.HTTPSPort)
-	}
-	if cfg.TLS.Cert == "" && !cfg.TLS.AutoTLS {
+
+	tlsEnabled := cfg.TLS.Cert != "" || cfg.TLS.AutoTLS || cfg.TLS.CertMagic.Enabled
+
+	var serverURL, insecureURL string
+	if tlsEnabled {
+		serverURL = fmt.Sprintf("https://%s", hostOnly)
+		if cfg.Network.HTTPSPort != 443 {
+			serverURL = fmt.Sprintf("https://%s:%d", hostOnly, cfg.Network.HTTPSPort)
+		}
+		if cfg.Network.Insecure {
+			insecureURL = fmt.Sprintf("http://%s", hostOnly)
+			if cfg.Network.HTTPPort != 80 {
+				insecureURL = fmt.Sprintf("http://%s:%d", hostOnly, cfg.Network.HTTPPort)
+			}
+		}
+	} else {
 		serverURL = fmt.Sprintf("http://%s", hostOnly)
 		if cfg.Network.HTTPPort != 80 {
 			serverURL = fmt.Sprintf("http://%s:%d", hostOnly, cfg.Network.HTTPPort)
@@ -179,7 +190,7 @@ func (f *Frontend) handleScript(w http.ResponseWriter, r *http.Request, localPor
 	flags := map[string]string{
 		"debug": r.URL.Query().Get("debug"),
 	}
-	scr, err := script.Generate(serverURL, sess, r.UserAgent(), flags, ttl, infinity, binaries)
+	scr, err := script.Generate(serverURL, insecureURL, sess, r.UserAgent(), flags, ttl, infinity, binaries)
 	if err != nil {
 		slog.Error("script generation failed", "ip", ip, "subdomain", sess.Subdomain, "error", err)
 		sendScriptError(w, "Script generation failed", http.StatusInternalServerError)

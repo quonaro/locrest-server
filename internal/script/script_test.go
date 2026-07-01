@@ -72,7 +72,7 @@ func TestGenerate(t *testing.T) {
 		SetupToken: "setuptoken123",
 		HTTPAuth:   "user:pass",
 	}
-	scr, err := Generate("https://example.com", sess, "curl/7.68.0", nil, time.Hour, false, nil)
+	scr, err := Generate("https://example.com", "", sess, "curl/7.68.0", nil, time.Hour, false, nil)
 	if err != nil {
 		t.Fatalf("Generate: %v", err)
 	}
@@ -106,7 +106,7 @@ func TestGenerateChecksums(t *testing.T) {
 		{Name: "lrc-linux-amd64", SHA256: "abc123deadbeef"},
 		{Name: "lrc-darwin-arm64", SHA256: "deadbeefabc123"},
 	}
-	scr, err := Generate("https://example.com", sess, "curl/7.68.0", nil, time.Hour, false, bins)
+	scr, err := Generate("https://example.com", "", sess, "curl/7.68.0", nil, time.Hour, false, bins)
 	if err != nil {
 		t.Fatalf("Generate: %v", err)
 	}
@@ -131,7 +131,7 @@ func TestGenerateDebugFlag(t *testing.T) {
 		TargetHost: "localhost",
 		SetupToken: "setuptoken123",
 	}
-	scr, err := Generate("https://example.com", sess, "wget/1.20.3", map[string]string{"debug": "true"}, time.Hour, false, nil)
+	scr, err := Generate("https://example.com", "", sess, "wget/1.20.3", map[string]string{"debug": "true"}, time.Hour, false, nil)
 	if err != nil {
 		t.Fatalf("Generate: %v", err)
 	}
@@ -151,13 +151,32 @@ func TestGenerateEscapes(t *testing.T) {
 		SetupToken: "token",
 		HTTPAuth:   "user:pass",
 	}
-	scr, err := Generate("https://example.com/path", sess, "", nil, 30*time.Minute, false, nil)
+	scr, err := Generate("https://example.com/path", "", sess, "", nil, 30*time.Minute, false, nil)
 	if err != nil {
 		t.Fatalf("Generate: %v", err)
 	}
 	// server URL should have trailing slash removed
 	if strings.Contains(scr, "https://example.com/path//") {
 		t.Fatal("trailing slash not trimmed")
+	}
+}
+
+func TestGenerateInsecureURL(t *testing.T) {
+	sess := &auth.Session{
+		Subdomain:  "testsub",
+		LocalPort:  8080,
+		TargetHost: "localhost",
+		SetupToken: "setuptoken123",
+	}
+	scr, err := Generate("https://example.com", "http://example.com", sess, "curl/7.68.0", nil, time.Hour, false, nil)
+	if err != nil {
+		t.Fatalf("Generate: %v", err)
+	}
+	if !strings.Contains(scr, `-insecure-url "ws://example.com/tunnel"`) {
+		t.Fatalf("script missing insecure-url flag: %q", scr)
+	}
+	if !strings.Contains(scr, `https://example.com/bin/${BIN_NAME}`) {
+		t.Fatal("script should use HTTPS for binary download")
 	}
 }
 
@@ -168,7 +187,7 @@ func TestGenerateInfinity(t *testing.T) {
 		TargetHost: "localhost",
 		SetupToken: "token",
 	}
-	scr, err := Generate("https://example.com", sess, "curl/7.68.0", nil, 0, true, nil)
+	scr, err := Generate("https://example.com", "", sess, "curl/7.68.0", nil, 0, true, nil)
 	if err != nil {
 		t.Fatalf("Generate: %v", err)
 	}

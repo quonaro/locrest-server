@@ -27,19 +27,21 @@ func DetectOS(ua string) string {
 
 // Params contains everything needed to render the one-liner script.
 type Params struct {
-	ServerURL   string
-	WSServerURL string
-	Subdomain   string
-	LocalPort   int
-	TargetHost  string
-	SetupToken  string
-	TokenTTL    time.Duration
-	OS          string
-	BinaryName  string
-	ExtraFlags  string
-	HTTPAuth    string
-	Infinity    bool
-	Checksums   map[string]string
+	ServerURL     string
+	WSServerURL   string
+	InsecureURL   string
+	WSInsecureURL string
+	Subdomain     string
+	LocalPort     int
+	TargetHost    string
+	SetupToken    string
+	TokenTTL      time.Duration
+	OS            string
+	BinaryName    string
+	ExtraFlags    string
+	HTTPAuth      string
+	Infinity      bool
+	Checksums     map[string]string
 }
 
 func wsURL(httpURL string) string {
@@ -143,7 +145,8 @@ while true; do
   if "$BIN" \
     -server "{{.WSServerURL}}/tunnel" \
     -port {{.LocalPort}} \
-{{if not .Infinity}}    -token-ttl "{{.TokenTTL}}" \
+{{if ne .WSInsecureURL ""}}    -insecure-url "{{.WSInsecureURL}}/tunnel" \
+{{end}}{{if not .Infinity}}    -token-ttl "{{.TokenTTL}}" \
 {{end}}{{if ne .TargetHost "localhost"}}    -host "{{.TargetHost}}" \
 {{end}}{{if ne .ExtraFlags ""}}    {{.ExtraFlags}} \
 {{end}}; then
@@ -164,7 +167,7 @@ done
 `))
 
 // Generate returns a rendered shell script for the given session.
-func Generate(serverURL string, sess *auth.Session, ua string, flags map[string]string, tokenTTL time.Duration, infinity bool, binaries []binary.FileInfo) (string, error) {
+func Generate(serverURL, insecureURL string, sess *auth.Session, ua string, flags map[string]string, tokenTTL time.Duration, infinity bool, binaries []binary.FileInfo) (string, error) {
 	os := DetectOS(ua)
 	serverURL = strings.TrimRight(serverURL, "/")
 	extra := ""
@@ -191,6 +194,10 @@ func Generate(serverURL string, sess *auth.Session, ua string, flags map[string]
 		HTTPAuth:    shellEscape(sess.HTTPAuth),
 		Infinity:    infinity,
 		Checksums:   checksums,
+	}
+	if insecureURL != "" {
+		p.InsecureURL = shellEscape(strings.TrimRight(insecureURL, "/"))
+		p.WSInsecureURL = shellEscape(wsURL(insecureURL))
 	}
 	var buf strings.Builder
 	if err := scriptTemplate.Execute(&buf, p); err != nil {
