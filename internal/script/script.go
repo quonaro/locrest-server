@@ -126,7 +126,8 @@ if [ "$NEED_DOWNLOAD" = "1" ]; then
       exit 1
     fi
   fi
-  cp "$TMP" "$BIN"
+  rm -f "$BIN"
+  mv "$TMP" "$BIN"
   chmod +x "$BIN"
 fi
 
@@ -145,6 +146,7 @@ if [ -f "$INSTALL_DIR/lrc" ] && [ -n "$EXPECTED" ]; then
   fi
 fi
 if [ "$INSTALL_NEEDED" = "1" ]; then
+  rm -f "$INSTALL_DIR/lrc"
   cp -f "$BIN" "$INSTALL_DIR/lrc"
   chmod +x "$INSTALL_DIR/lrc"
 fi
@@ -161,11 +163,7 @@ echo "Tunnel URL: {{.ServerURL}} (Basic Auth: {{.HTTPAuth}})"
 {{end}}
 {{if .Daemon}}
 # Daemon mode: start supervisor in background, then add tunnel
-if ! "$BIN" -supervisor >/dev/null 2>&1 &
-then
-  echo "Failed to start supervisor" >&2
-  exit 1
-fi
+"$BIN" -supervisor >/dev/null 2>&1 &
 SUP_PID=$!
 sleep 2
 if ! "$BIN" list >/dev/null 2>&1; then

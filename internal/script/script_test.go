@@ -88,6 +88,8 @@ func TestGenerate(t *testing.T) {
 		"user:pass",
 		"Basic Auth",
 		"NEED_DOWNLOAD",
+		"rm -f \"$BIN\"",
+		"mv \"$TMP\" \"$BIN\"",
 	} {
 		if !strings.Contains(scr, want) {
 			t.Fatalf("script missing %q", want)
@@ -225,7 +227,16 @@ func TestGenerateDaemon(t *testing.T) {
 	if !strings.Contains(scr, "INSTALL_DIR") {
 		t.Fatal("daemon script should install lrc to PATH")
 	}
+	if !strings.Contains(scr, "rm -f \"$INSTALL_DIR/lrc\"") {
+		t.Fatal("daemon script should remove old binary before copying to INSTALL_DIR")
+	}
 	if !strings.Contains(scr, "cp -f \"$BIN\" \"$INSTALL_DIR/lrc\"") {
 		t.Fatal("daemon script should copy binary to INSTALL_DIR")
+	}
+	if strings.Contains(scr, "Failed to start supervisor") {
+		t.Fatal("daemon script should not contain the old broken 'Failed to start supervisor' check")
+	}
+	if !strings.Contains(scr, "\"$BIN\" -supervisor >/dev/null 2>&1 &\nSUP_PID=$!") {
+		t.Fatal("daemon script should start supervisor in background directly")
 	}
 }
