@@ -62,7 +62,7 @@ func Setup(level string) {
 
 	logFile := filepath.Join(dir, "locrest-server.log")
 
-	writer = &lumberjack.Logger{
+	fileWriter := &lumberjack.Logger{
 		Filename:   logFile,
 		MaxSize:    envInt("LOCREST_LOG_MAX_SIZE_MB", 100),
 		MaxAge:     envInt("LOCREST_LOG_MAX_AGE_DAYS", 7),
@@ -70,6 +70,8 @@ func Setup(level string) {
 		LocalTime:  true,
 		Compress:   true,
 	}
+
+	writer = io.MultiWriter(os.Stdout, fileWriter)
 
 	slog.SetDefault(newHandler(level))
 }

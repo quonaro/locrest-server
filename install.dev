@@ -206,17 +206,22 @@ User=__USER__
 Group=__GROUP__
 WorkingDirectory=__DATA_DIR__
 Environment=LOCREST_CONFIG=__CONFIG_FILE__
+Environment=LOCREST_LOG_DIR=__LOG_DIR__
 Environment=LOCREST_ADMIN_SOCKET=__DATA_DIR__/locrest-admin.sock
 Environment=PATH=__INSTALL_DIR__:/usr/bin:/bin
 ExecStart=__INSTALL_DIR__/lrs run
 Restart=on-failure
 RestartSec=5
+KillSignal=SIGTERM
+TimeoutStopSec=30
+StandardOutput=journal
+StandardError=journal
 AmbientCapabilities=CAP_NET_BIND_SERVICE
 CapabilityBoundingSet=CAP_NET_BIND_SERVICE
 [Install]
 WantedBy=multi-user.target
 UNIT
-	sed -i.bak -e "s|__USER__|$USER_NAME|g" -e "s|__GROUP__|$GROUP_NAME|g" -e "s|__DATA_DIR__|$DATA_DIR|g" -e "s|__CONFIG_FILE__|$CONFIG_FILE|g" -e "s|__INSTALL_DIR__|$INSTALL_DIR|g" "/etc/systemd/system/$SERVICE_NAME.service"
+	sed -i.bak -e "s|__USER__|$USER_NAME|g" -e "s|__GROUP__|$GROUP_NAME|g" -e "s|__DATA_DIR__|$DATA_DIR|g" -e "s|__CONFIG_FILE__|$CONFIG_FILE|g" -e "s|__INSTALL_DIR__|$INSTALL_DIR|g" -e "s|__LOG_DIR__|$LOG_DIR|g" "/etc/systemd/system/$SERVICE_NAME.service"
 	rm -f "/etc/systemd/system/$SERVICE_NAME.service.bak"
 	chmod 644 "/etc/systemd/system/$SERVICE_NAME.service"
 }
