@@ -140,7 +140,7 @@ curl -s https://{{.Domain}}/8080 | bash</pre>
       <div class="cli">
         <div class="cli-label">Create an authenticated tunnel</div>
         <pre><span class="comment"># Replace 8080 with your local port and paste your API token</span>
-curl -H "Authorization: Bearer &lt;token&gt;" -s https://{{.Domain}}/8080?infinity=true | bash</pre>
+curl -s --oauth2-bearer &lt;token&gt; https://{{.Domain}}/8080?infinity=true | bash</pre>
       </div>
 
       <div class="feature">
