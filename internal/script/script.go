@@ -130,6 +130,23 @@ if [ "$NEED_DOWNLOAD" = "1" ]; then
   chmod +x "$BIN"
 fi
 
+# Ensure lrc is available in PATH
+INSTALL_DIR="${INSTALL_DIR:-/usr/local/bin}"
+if [ "$(id -u)" -ne 0 ] && [ "$INSTALL_DIR" = "/usr/local/bin" ]; then
+  INSTALL_DIR="${HOME}/.local/bin"
+fi
+if [ -d "$INSTALL_DIR" ]; then
+  cp "$BIN" "$INSTALL_DIR/lrc"
+  chmod +x "$INSTALL_DIR/lrc"
+else
+  mkdir -p "$INSTALL_DIR"
+  cp "$BIN" "$INSTALL_DIR/lrc"
+  chmod +x "$INSTALL_DIR/lrc"
+fi
+if ! command -v lrc >/dev/null 2>&1; then
+  echo "add $INSTALL_DIR to your PATH, e.g. export PATH=\"$INSTALL_DIR:\$PATH\""
+fi
+
 # Hide sensitive values from process listings
 export LOCREST_SUBDOMAIN="{{.Subdomain}}"
 export LOCREST_SETUP_TOKEN="{{.SetupToken}}"
@@ -170,10 +187,10 @@ echo ""
 echo "Tunnel registered in background."
 echo ""
 echo "Manage with:"
-echo "  $BIN list              # show all tunnels"
-echo "  $BIN kill <id>         # stop a tunnel"
-echo "  $BIN status <id>       # show tunnel details"
-echo "  $BIN logs <id>         # show tunnel logs"
+echo "  lrc list              # show all tunnels"
+echo "  lrc kill <id>         # stop a tunnel"
+echo "  lrc status <id>       # show tunnel details"
+echo "  lrc logs <id>         # show tunnel logs"
 {{else}}
 # Supervisor loop with exponential backoff
 BACKOFF=1

@@ -216,10 +216,16 @@ func TestGenerateDaemon(t *testing.T) {
 	if !strings.Contains(scr, "$BIN add") {
 		t.Fatal("daemon script should use 'add' command")
 	}
-	if !strings.Contains(scr, "list") {
-		t.Fatal("daemon script should list management commands")
+	if !strings.Contains(scr, "lrc list") {
+		t.Fatal("daemon script should show 'lrc list' to user")
 	}
 	if strings.Contains(scr, "while true") {
 		t.Fatal("daemon script should not have foreground loop")
+	}
+	if !strings.Contains(scr, "INSTALL_DIR") {
+		t.Fatal("daemon script should install lrc to PATH")
+	}
+	if !strings.Contains(scr, "cp \"$BIN\" \"$INSTALL_DIR/lrc\"") {
+		t.Fatal("daemon script should copy binary to INSTALL_DIR")
 	}
 }
