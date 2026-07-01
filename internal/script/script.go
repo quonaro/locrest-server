@@ -135,12 +135,17 @@ INSTALL_DIR="${INSTALL_DIR:-/usr/local/bin}"
 if [ "$(id -u)" -ne 0 ] && [ "$INSTALL_DIR" = "/usr/local/bin" ]; then
   INSTALL_DIR="${HOME}/.local/bin"
 fi
-if [ -d "$INSTALL_DIR" ]; then
-  cp "$BIN" "$INSTALL_DIR/lrc"
-  chmod +x "$INSTALL_DIR/lrc"
-else
-  mkdir -p "$INSTALL_DIR"
-  cp "$BIN" "$INSTALL_DIR/lrc"
+mkdir -p "$INSTALL_DIR"
+
+INSTALL_NEEDED=1
+if [ -f "$INSTALL_DIR/lrc" ] && [ -n "$EXPECTED" ]; then
+  GOT=$($SHA256_CMD "$INSTALL_DIR/lrc" | awk '{print $1}')
+  if [ "$GOT" = "$EXPECTED" ]; then
+    INSTALL_NEEDED=0
+  fi
+fi
+if [ "$INSTALL_NEEDED" = "1" ]; then
+  cp -f "$BIN" "$INSTALL_DIR/lrc"
   chmod +x "$INSTALL_DIR/lrc"
 fi
 if ! command -v lrc >/dev/null 2>&1; then

@@ -225,7 +225,7 @@ func TestGenerateDaemon(t *testing.T) {
 	if !strings.Contains(scr, "INSTALL_DIR") {
 		t.Fatal("daemon script should install lrc to PATH")
 	}
-	if !strings.Contains(scr, "cp \"$BIN\" \"$INSTALL_DIR/lrc\"") {
+	if !strings.Contains(scr, "cp -f \"$BIN\" \"$INSTALL_DIR/lrc\"") {
 		t.Fatal("daemon script should copy binary to INSTALL_DIR")
 	}
 }
