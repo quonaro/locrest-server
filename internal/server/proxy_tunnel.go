@@ -40,7 +40,7 @@ func (f *Frontend) proxyWebSocket(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	pipeCh := tunnel.GetProxyPipe(backendPort)
+	pipeCh := tunnel.GetProxyPipe(backendPort, "tcp")
 	if pipeCh == nil {
 		slog.Warn("websocket tunnel pipe missing", "ip", ip, "subdomain", subdomain, "backend_port", backendPort)
 		f.sendHTMLError(w, r, http.StatusNotFound, "Tunnel Not Found", "No active tunnel for this host. The tunnel may have expired or the subdomain is incorrect.")
@@ -188,7 +188,7 @@ func (f *Frontend) proxyTunnel(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	pipeCh := tunnel.GetProxyPipe(backendPort)
+	pipeCh := tunnel.GetProxyPipe(backendPort, "tcp")
 	if pipeCh == nil {
 		slog.Warn("http tunnel pipe missing", "ip", ip, "subdomain", subdomain, "backend_port", backendPort)
 		f.sendHTMLError(w, r, http.StatusNotFound, "Tunnel Not Found", "No active tunnel for this host. The tunnel may have expired or the subdomain is incorrect.")

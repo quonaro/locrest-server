@@ -3,6 +3,7 @@ package chvdtunnel
 import (
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"net"
 	"strconv"
@@ -58,23 +59,27 @@ func (l *pipeListener) inject(conn net.Conn) {
 	}
 }
 
-// Global registry of proxy pipes keyed by server-side port (LocalPort).
+// Global registry of proxy pipes keyed by server-side port (LocalPort) and proto.
 var (
-	proxyPipes   = make(map[int]*pipeListener)
+	proxyPipes   = make(map[string]*pipeListener)
 	proxyPipesMu sync.RWMutex
 )
 
-// RegisterProxyPipe registers a pipe listener for a given port.
-func RegisterProxyPipe(port int, pl *pipeListener) {
+func proxyPipeKey(port int, proto string) string {
+	return fmt.Sprintf("%d/%s", port, proto)
+}
+
+// RegisterProxyPipe registers a pipe listener for a given port and protocol.
+func RegisterProxyPipe(port int, proto string, pl *pipeListener) {
 	proxyPipesMu.Lock()
-	proxyPipes[port] = pl
+	proxyPipes[proxyPipeKey(port, proto)] = pl
 	proxyPipesMu.Unlock()
 }
 
-// GetProxyPipe returns the injection channel for a given port, or nil if not found.
-func GetProxyPipe(port int) chan net.Conn {
+// GetProxyPipe returns the injection channel for a given port and protocol, or nil if not found.
+func GetProxyPipe(port int, proto string) chan net.Conn {
 	proxyPipesMu.RLock()
-	pl := proxyPipes[port]
+	pl := proxyPipes[proxyPipeKey(port, proto)]
 	proxyPipesMu.RUnlock()
 	if pl == nil {
 		return nil
@@ -82,10 +87,10 @@ func GetProxyPipe(port int) chan net.Conn {
 	return pl.ch
 }
 
-// UnregisterProxyPipe removes a pipe listener for a given port.
-func UnregisterProxyPipe(port int) {
+// UnregisterProxyPipe removes a pipe listener for a given port and protocol.
+func UnregisterProxyPipe(port int, proto string) {
 	proxyPipesMu.Lock()
-	delete(proxyPipes, port)
+	delete(proxyPipes, proxyPipeKey(port, proto))
 	proxyPipesMu.Unlock()
 }
 
@@ -121,7 +126,7 @@ func NewProxy(logger *cio.Logger, sshTun sshTunnel, index int, remote *settings.
 	if p.pipe != nil {
 		port, _ := strconv.Atoi(remote.LocalPort)
 		if port > 0 {
-			RegisterProxyPipe(port, p.pipe)
+			RegisterProxyPipe(port, remote.LocalProto, p.pipe)
 		}
 	}
 	return p, nil
@@ -178,7 +183,7 @@ func (p *Proxy) runPipe(ctx context.Context) error {
 		if p.pipe != nil {
 			port, _ := strconv.Atoi(p.remote.LocalPort)
 			if port > 0 {
-				UnregisterProxyPipe(port)
+				UnregisterProxyPipe(port, p.remote.LocalProto)
 			}
 		}
 	}()

@@ -35,7 +35,7 @@ func (f *Frontend) startUDPListener(port int) {
 
 	slog.Info("udp raw listening", "port", port)
 
-	pipeCh := tunnel.GetProxyPipe(port)
+	pipeCh := tunnel.GetProxyPipe(port, "udp")
 	if pipeCh == nil {
 		slog.Warn("udp raw: no proxy pipe", "port", port)
 		return

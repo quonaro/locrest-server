@@ -34,7 +34,7 @@ func (f *Frontend) startTCPListener(port int) {
 			slog.Debug("tcp raw accept error", "port", port, "error", err)
 			return
 		}
-		pipeCh := tunnel.GetProxyPipe(port)
+		pipeCh := tunnel.GetProxyPipe(port, "tcp")
 		if pipeCh == nil {
 			_ = conn.Close()
 			continue

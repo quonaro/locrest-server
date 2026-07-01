@@ -297,7 +297,7 @@ func (f *Frontend) ReloadChiselUsers() {
 		case "tcp", "tcp/udp":
 			go func(port int, mode string) {
 				for i := 0; i < 50; i++ {
-					if tunnel.GetProxyPipe(port) != nil {
+					if tunnel.GetProxyPipe(port, "tcp") != nil {
 						f.startTCPListener(port)
 						if mode == "tcp/udp" {
 							f.startUDPListener(port)

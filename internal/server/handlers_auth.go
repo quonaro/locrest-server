@@ -273,7 +273,7 @@ func (f *Frontend) handleVerify(w http.ResponseWriter, r *http.Request) {
 	if sess.Mode == "tcp" || sess.Mode == "tcp/udp" {
 		go func(port int, mode string) {
 			for i := 0; i < 50; i++ {
-				if tunnel.GetProxyPipe(port) != nil {
+				if tunnel.GetProxyPipe(port, "tcp") != nil {
 					f.startTCPListener(port)
 					if mode == "tcp/udp" {
 						f.startUDPListener(port)
