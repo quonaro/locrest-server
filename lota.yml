@@ -28,7 +28,7 @@ push:
   - "tag:str?"
   script: |
     if [ -n $tag ]; then
-      git tag $tag
+      git tag -f $tag
       git push origin $tag --force
     else
       git push origin main
