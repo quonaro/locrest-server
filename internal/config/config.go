@@ -18,14 +18,26 @@ type RateLimit struct {
 	Window   time.Duration `yaml:"window"`
 }
 
+// CertMagicConfig holds DNS-01 challenge settings.
+type CertMagicConfig struct {
+	Enabled         bool   `yaml:"enabled"`
+	DNSProvider     string `yaml:"dns_provider"`
+	APIToken        string `yaml:"api_token"`
+	AccessKeyID     string `yaml:"access_key_id"`
+	SecretAccessKey string `yaml:"secret_access_key"`
+	Region          string `yaml:"region"`
+	Staging         bool   `yaml:"staging"`
+	CacheDir        string `yaml:"cache_dir"`
+}
+
 // TLSConfig holds certificate and ACME settings.
 type TLSConfig struct {
-	Cert string `yaml:"cert"`
-	Key  string `yaml:"key"`
-	// AutoTLS enables autocert when Domains is non-empty.
-	AutoTLS bool     `yaml:"auto_tls"`
-	Domains []string `yaml:"domains"`
-	Email   string   `yaml:"email"`
+	Cert      string          `yaml:"cert"`
+	Key       string          `yaml:"key"`
+	AutoTLS   bool            `yaml:"auto_tls"`
+	Domains   []string        `yaml:"domains"`
+	Email     string          `yaml:"email"`
+	CertMagic CertMagicConfig `yaml:"certmagic"`
 }
 
 // Permissions defines capabilities for a role (public or auth).
@@ -174,6 +186,15 @@ func (c *ServerConfig) EffectiveBinaryCacheDir() string {
 		return c.Binary.CacheDir
 	}
 	return filepath.Join(filepath.Dir(c.Runtime.DBPath), "bin")
+}
+
+// EffectiveCertMagicCacheDir returns the certmagic certificate cache directory.
+// When TLS.CertMagic.CacheDir is empty, it defaults to a "certs" subdirectory next to Runtime.DBPath.
+func (c *ServerConfig) EffectiveCertMagicCacheDir() string {
+	if c.TLS.CertMagic.CacheDir != "" {
+		return c.TLS.CertMagic.CacheDir
+	}
+	return filepath.Join(filepath.Dir(c.Runtime.DBPath), "certs")
 }
 
 // Validate checks the configuration for logical errors.
