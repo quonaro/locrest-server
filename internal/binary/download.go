@@ -60,21 +60,6 @@ func readSHA256File(path string) (string, error) {
 	return hash, nil
 }
 
-// versionFromURL extracts a release tag from a GitHub releases URL.
-func versionFromURL(u string) string {
-	if strings.Contains(u, "/releases/latest/download") {
-		return "latest"
-	}
-	parts := strings.Split(u, "/releases/download/")
-	if len(parts) > 1 {
-		v := strings.Split(parts[1], "/")[0]
-		if v != "" {
-			return v
-		}
-	}
-	return "unknown"
-}
-
 func verifyFile(filePath, checksumPath string) error {
 	expected, err := readSHA256File(checksumPath)
 	if err != nil {

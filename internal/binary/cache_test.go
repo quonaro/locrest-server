@@ -40,6 +40,24 @@ func TestCacheList(t *testing.T) {
 	if files[0].Size != int64(len("fake-binary")) {
 		t.Fatalf("Size = %d, want %d", files[0].Size, len("fake-binary"))
 	}
+	if files[0].Version != "" {
+		t.Fatalf("Version = %q, want empty when version.txt is absent", files[0].Version)
+	}
+
+	// Add version.txt and re-list.
+	if err := os.WriteFile(filepath.Join(dir, "version.txt"), []byte("v1.2.3"), 0644); err != nil {
+		t.Fatalf("write version.txt: %v", err)
+	}
+	files, err = cache.List()
+	if err != nil {
+		t.Fatalf("List with version: %v", err)
+	}
+	if len(files) != 1 {
+		t.Fatalf("expected 1 file, got %d", len(files))
+	}
+	if files[0].Version != "v1.2.3" {
+		t.Fatalf("Version = %q, want v1.2.3", files[0].Version)
+	}
 }
 
 func TestVerifyFile(t *testing.T) {

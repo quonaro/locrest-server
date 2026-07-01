@@ -65,7 +65,7 @@ func (c *Cache) Update(ctx context.Context) error {
 	var downloaded []string
 	for _, plat := range c.platforms {
 		binName := "lrc-" + plat
-		if err := c.downloadPair(ctx, client, tmpDir, binName); err != nil {
+		if err := c.downloadFiles(ctx, client, tmpDir, binName); err != nil {
 			slog.Warn("binary download failed, skipping platform", "platform", plat, "error", err)
 			continue
 		}
@@ -76,10 +76,12 @@ func (c *Cache) Update(ctx context.Context) error {
 		return fmt.Errorf("no binaries could be downloaded")
 	}
 
-	// Persist the release version for listing.
-	ver := versionFromURL(c.binaryURL)
-	if err := os.WriteFile(filepath.Join(tmpDir, "version"), []byte(ver), 0644); err != nil {
-		return fmt.Errorf("write version file: %w", err)
+	// Try to fetch a shared version.txt from the same directory as the binaries.
+	verURL := c.binaryURL + "/version.txt"
+	verPath := filepath.Join(tmpDir, "version.txt")
+	if err := downloadFile(ctx, client, verURL, verPath); err != nil {
+		// version.txt is optional; remove the partial file if the download failed.
+		_ = os.Remove(verPath)
 	}
 
 	// Verify every checksum before moving anything into place.
@@ -108,7 +110,7 @@ func (c *Cache) Update(ctx context.Context) error {
 	return nil
 }
 
-func (c *Cache) downloadPair(ctx context.Context, client *http.Client, tmpDir, binName string) error {
+func (c *Cache) downloadFiles(ctx context.Context, client *http.Client, tmpDir, binName string) error {
 	binURL := c.binaryURL + "/" + binName
 	if err := downloadFile(ctx, client, binURL, filepath.Join(tmpDir, binName)); err != nil {
 		return err
@@ -130,7 +132,7 @@ func (c *Cache) List() ([]FileInfo, error) {
 		return nil, fmt.Errorf("read cache dir: %w", err)
 	}
 
-	ver, _ := os.ReadFile(filepath.Join(c.dir, "version"))
+	ver, _ := os.ReadFile(filepath.Join(c.dir, "version.txt"))
 	version := strings.TrimSpace(string(ver))
 
 	var result []FileInfo

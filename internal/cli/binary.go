@@ -60,7 +60,9 @@ func BinaryList(ctx context.Context, nctx engine.NativeContext) error {
 		_, _ = dim.Fprintf(nctx.Stdout, "  size:   %d bytes\n", f.Size)
 		_, _ = dim.Fprintf(nctx.Stdout, "  mod:    %s\n", f.ModTime.Format(time.RFC3339))
 		_, _ = dim.Fprintf(nctx.Stdout, "  sha256: %s\n", f.SHA256)
-		_, _ = dim.Fprintf(nctx.Stdout, "  version: %s\n", f.Version)
+		if f.Version != "" {
+			_, _ = dim.Fprintf(nctx.Stdout, "  version: %s\n", f.Version)
+		}
 		_, _ = fmt.Fprintln(nctx.Stdout)
 	}
 	return nil
