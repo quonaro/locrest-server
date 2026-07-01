@@ -184,24 +184,18 @@ download_binary() {
 		[ -z "$META_TAG" ] && error "could not determine latest release version"
 	fi
 	local base_url="https://github.com/$OWNER/$REPO/releases/download/$VERSION"
-	local tmp_dir asset candidate err
-	tmp_dir=$(mktemp -d)
+	local tmp_dir asset err available
+	tmp_dir=$(mktemp -d -p /var/tmp lrs-install.XXXXXX 2>/dev/null || mktemp -d)
+	available=$(df -Pk "$tmp_dir" | awk 'NR==2 {print $4}')
+	if [ "$available" -lt 51200 ]; then
+		error "not enough free space in temporary directory $tmp_dir ($((available / 1024)) MiB available); free up /tmp or /var/tmp, or set TMPDIR"
+	fi
 	asset="$BIN_NAME-$OS-$ARCH"
 	err="$tmp_dir/download.err"
 	info "downloading $asset"
 	if try_download "$base_url/$asset" "$tmp_dir/$asset" "$err"; then BIN_TMP="$tmp_dir/$asset"
-	elif try_download "$base_url/$asset.tar.gz" "$tmp_dir/$asset.tar.gz" "$err"; then
-		tar -xzf "$tmp_dir/$asset.tar.gz" -C "$tmp_dir"
-		candidate=$(find "$tmp_dir" -maxdepth 2 -type f -name "$BIN_NAME" | head -n 1)
-		[ -z "$candidate" ] && error "archive did not contain $BIN_NAME"
-		BIN_TMP="$candidate"
-	elif try_download "$base_url/${BIN_NAME}_${OS}_${ARCH}.tar.gz" "$tmp_dir/alt.tar.gz" "$err"; then
-		tar -xzf "$tmp_dir/alt.tar.gz" -C "$tmp_dir"
-		candidate=$(find "$tmp_dir" -maxdepth 2 -type f -name "$BIN_NAME" | head -n 1)
-		[ -z "$candidate" ] && error "archive did not contain $BIN_NAME"
-		BIN_TMP="$candidate"
 	else
-		printf '%s\n' "tried:" "$base_url/$asset" "$base_url/$asset.tar.gz" "$base_url/${BIN_NAME}_${OS}_${ARCH}.tar.gz" >&2
+		printf '%s\n' "tried:" "$base_url/$asset" >&2
 		error "could not find release asset for $OS/$ARCH ($(cat "$err"))"
 	fi
 	if try_download "$base_url/$(basename "$BIN_TMP").sha256" "$tmp_dir/checksum"; then
