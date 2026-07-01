@@ -1,3 +1,10 @@
+init:
+  desc: Write a default configuration file
+  native: true
+  show: false
+  args:
+  - "path:str"
+
 run:
   desc: Start the locrest server
   native: true

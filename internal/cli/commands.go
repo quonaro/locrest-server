@@ -73,6 +73,20 @@ func checkAdminSocket(socketPath string) error {
 	return nil
 }
 
+// InitConfig writes a default configuration file to the given path.
+func InitConfig(ctx context.Context, nctx engine.NativeContext) error {
+	path := nctx.Args["path"]
+	if path == "" {
+		path = defaultConfigPath
+	}
+	cfg := config.DefaultConfig()
+	if err := config.Save(path, cfg); err != nil {
+		return err
+	}
+	fmt.Printf("Config written to %s\n", path)
+	return nil
+}
+
 // SoftReload triggers a config reload via the admin socket.
 func SoftReload(ctx context.Context, nctx engine.NativeContext) error {
 	if err := checkAdminSocket(adminSocketPath()); err != nil {

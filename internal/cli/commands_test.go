@@ -1,9 +1,32 @@
 package cli
 
 import (
+	"context"
 	"os"
+	"path/filepath"
 	"testing"
+
+	"github.com/quonaro/lota/engine"
 )
+
+func TestInitConfig(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "locrest.yaml")
+
+	ctx := context.Background()
+	nctx := engine.NativeContext{Args: map[string]string{"path": path}}
+	if err := InitConfig(ctx, nctx); err != nil {
+		t.Fatalf("InitConfig: %v", err)
+	}
+
+	b, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read config: %v", err)
+	}
+	if len(b) == 0 {
+		t.Fatal("config file is empty")
+	}
+}
 
 func TestConfigPath(t *testing.T) {
 	orig := os.Getenv("LOCREST_CONFIG")

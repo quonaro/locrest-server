@@ -27,6 +27,9 @@ func TestDefaultConfig(t *testing.T) {
 	if cfg.Runtime.DBPath != "locrest.db" {
 		t.Fatalf("DBPath = %q, want locrest.db", cfg.Runtime.DBPath)
 	}
+	if cfg.Runtime.AdminSocketPath != "/var/lib/locrest/locrest-admin.sock" {
+		t.Fatalf("AdminSocketPath = %q, want /var/lib/locrest/locrest-admin.sock", cfg.Runtime.AdminSocketPath)
+	}
 	if cfg.Tunnel.MaxSessions != 10000 {
 		t.Fatalf("MaxSessions = %d, want 10000", cfg.Tunnel.MaxSessions)
 	}
@@ -47,6 +50,13 @@ func TestDefaultConfig(t *testing.T) {
 	}
 	if !cfg.Permissions.Auth.RawTCP {
 		t.Fatal("auth RawTCP should be true")
+	}
+}
+
+func TestDefaultConfigValidate(t *testing.T) {
+	cfg := DefaultConfig()
+	if err := cfg.Validate(); err != nil {
+		t.Fatalf("DefaultConfig failed Validate: %v", err)
 	}
 }
 
@@ -116,6 +126,28 @@ func TestBinaryRefreshIntervalDefault(t *testing.T) {
 	cfg := DefaultConfig()
 	if cfg.Binary.RefreshInterval != 24*time.Hour {
 		t.Fatalf("BinaryRefreshInterval = %v, want 24h", cfg.Binary.RefreshInterval)
+	}
+}
+
+func TestSave(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "sub", "locrest.yaml")
+	cfg := DefaultConfig()
+	cfg.Network.Domain = "saved.example.com"
+
+	if err := Save(path, cfg); err != nil {
+		t.Fatalf("Save: %v", err)
+	}
+
+	loaded, err := Load(path)
+	if err != nil {
+		t.Fatalf("Load after Save: %v", err)
+	}
+	if loaded.Network.Domain != "saved.example.com" {
+		t.Fatalf("Domain = %q, want saved.example.com", loaded.Network.Domain)
+	}
+	if loaded.Runtime.AdminSocketPath != "/var/lib/locrest/locrest-admin.sock" {
+		t.Fatalf("AdminSocketPath = %q, want /var/lib/locrest/locrest-admin.sock", loaded.Runtime.AdminSocketPath)
 	}
 }
 

@@ -143,10 +143,11 @@ func DefaultConfig() *ServerConfig {
 			RegenerateRateLimit: RateLimit{Requests: 3, Window: time.Minute},
 		},
 		Runtime: RuntimeConfig{
-			DBPath:         "locrest.db",
-			RootPage:       true,
-			LogLevel:       "info",
-			StatusEndpoint: true,
+			DBPath:          "locrest.db",
+			AdminSocketPath: "/var/lib/locrest/locrest-admin.sock",
+			RootPage:        true,
+			LogLevel:        "info",
+			StatusEndpoint:  true,
 		},
 		Binary: BinaryConfig{
 			URL:             DefaultBinaryURL,
@@ -246,6 +247,24 @@ func (c *ServerConfig) Validate() error {
 	}
 	if c.Binary.RefreshInterval < 0 {
 		return fmt.Errorf("binaries.refresh_interval must be >= 0")
+	}
+	return nil
+}
+
+// Save writes a ServerConfig to a YAML file nested under `server:`.
+func Save(path string, cfg *ServerConfig) error {
+	b, err := yaml.Marshal(yamlRoot{Server: *cfg})
+	if err != nil {
+		return fmt.Errorf("marshal config: %w", err)
+	}
+	dir := filepath.Dir(path)
+	if dir != "" && dir != "." {
+		if err := os.MkdirAll(dir, 0750); err != nil {
+			return fmt.Errorf("create config dir: %w", err)
+		}
+	}
+	if err := os.WriteFile(path, b, 0640); err != nil {
+		return fmt.Errorf("write config: %w", err)
 	}
 	return nil
 }

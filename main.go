@@ -60,6 +60,7 @@ func parseGlobalFlags(args []string) (remaining []string, showVersion, showHelp 
 
 func buildApp() (*engine.App, error) {
 	builder := engine.NewBuilder("lrs", cliYAML)
+	builder.RegisterNative("init", cli.InitConfig)
 	builder.RegisterNative("run", cli.StartServer)
 	builder.RegisterNative("user.add", cli.UserAdd)
 	builder.RegisterNative("user.delete", cli.UserDelete)
