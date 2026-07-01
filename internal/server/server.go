@@ -305,7 +305,21 @@ func (f *Frontend) ReloadChiselUsers() {
 					if tunnel.GetProxyPipe(port, "tcp") != nil {
 						f.startTCPListener(port)
 						if mode == "tcp/udp" {
-							f.startUDPListener(port)
+							go func(udpPort int) {
+								defer func() {
+									if r := recover(); r != nil {
+										slog.Error("panic in reload udp listener", "port", udpPort, "recover", r)
+									}
+								}()
+								for j := 0; j < 50; j++ {
+									if tunnel.GetProxyPipe(udpPort, "udp") != nil {
+										f.startUDPListener(udpPort)
+										return
+									}
+									time.Sleep(100 * time.Millisecond)
+								}
+								slog.Warn("reload udp raw: chisel pipe never created", "port", udpPort)
+							}(port)
 						}
 						return
 					}

@@ -281,8 +281,21 @@ func (f *Frontend) handleVerify(w http.ResponseWriter, r *http.Request) {
 				if tunnel.GetProxyPipe(port, "tcp") != nil {
 					f.startTCPListener(port)
 					if mode == "tcp/udp" {
-						slog.Info("starting udp listener", "port", port)
-						f.startUDPListener(port)
+						go func(udpPort int) {
+							defer func() {
+								if r := recover(); r != nil {
+									slog.Error("panic in udp listener startup", "port", udpPort, "recover", r)
+								}
+							}()
+							for j := 0; j < 50; j++ {
+								if tunnel.GetProxyPipe(udpPort, "udp") != nil {
+									f.startUDPListener(udpPort)
+									return
+								}
+								time.Sleep(100 * time.Millisecond)
+							}
+							slog.Warn("udp raw: chisel pipe never created", "port", udpPort)
+						}(port)
 					}
 					return
 				}
