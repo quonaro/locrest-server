@@ -7,6 +7,7 @@ import (
 	"io"
 	"net"
 	"strconv"
+	"strings"
 	"sync"
 
 	"github.com/jpillora/chisel/share/cio"
@@ -20,6 +21,15 @@ type pipeListener struct {
 	ch     chan net.Conn
 	closed chan struct{}
 	once   sync.Once
+}
+
+func localPipePort(s string) int {
+	portStr := s
+	if idx := strings.Index(portStr, "/"); idx >= 0 {
+		portStr = portStr[:idx]
+	}
+	port, _ := strconv.Atoi(portStr)
+	return port
 }
 
 func newPipeListener() *pipeListener {
@@ -124,7 +134,7 @@ func NewProxy(logger *cio.Logger, sshTun sshTunnel, index int, remote *settings.
 		return nil, err
 	}
 	if p.pipe != nil {
-		port, _ := strconv.Atoi(remote.LocalPort)
+		port := localPipePort(remote.LocalPort)
 		if port > 0 {
 			RegisterProxyPipe(port, remote.LocalProto, p.pipe)
 		}
@@ -181,7 +191,7 @@ func (p *Proxy) runPipe(ctx context.Context) error {
 	defer func() {
 		close(done)
 		if p.pipe != nil {
-			port, _ := strconv.Atoi(p.remote.LocalPort)
+			port := localPipePort(p.remote.LocalPort)
 			if port > 0 {
 				UnregisterProxyPipe(port, p.remote.LocalProto)
 			}
