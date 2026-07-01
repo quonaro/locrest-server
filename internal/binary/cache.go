@@ -28,6 +28,7 @@ type FileInfo struct {
 	ModTime   time.Time `json:"mod_time"`
 	SHA256    string    `json:"sha256"`
 	SHA256URL string    `json:"sha256_url"`
+	Version   string    `json:"version"`
 }
 
 // Cache manages downloaded client binaries.
@@ -73,6 +74,12 @@ func (c *Cache) Update(ctx context.Context) error {
 
 	if len(downloaded) == 0 {
 		return fmt.Errorf("no binaries could be downloaded")
+	}
+
+	// Persist the release version for listing.
+	ver := versionFromURL(c.binaryURL)
+	if err := os.WriteFile(filepath.Join(tmpDir, "version"), []byte(ver), 0644); err != nil {
+		return fmt.Errorf("write version file: %w", err)
 	}
 
 	// Verify every checksum before moving anything into place.
@@ -123,6 +130,9 @@ func (c *Cache) List() ([]FileInfo, error) {
 		return nil, fmt.Errorf("read cache dir: %w", err)
 	}
 
+	ver, _ := os.ReadFile(filepath.Join(c.dir, "version"))
+	version := strings.TrimSpace(string(ver))
+
 	var result []FileInfo
 	for _, entry := range entries {
 		if entry.IsDir() || !strings.HasPrefix(entry.Name(), "lrc-") || strings.HasSuffix(entry.Name(), ".sha256") {
@@ -137,6 +147,7 @@ func (c *Cache) List() ([]FileInfo, error) {
 			Size:      info.Size(),
 			ModTime:   info.ModTime(),
 			SHA256URL: c.binaryURL + "/" + entry.Name() + ".sha256",
+			Version:   version,
 		}
 		if sum, err := readSHA256File(filepath.Join(c.dir, entry.Name()+".sha256")); err == nil {
 			fi.SHA256 = sum

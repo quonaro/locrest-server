@@ -40,6 +40,7 @@ func BinaryList(ctx context.Context, nctx engine.NativeContext) error {
 		ModTime   time.Time `json:"mod_time"`
 		SHA256    string    `json:"sha256"`
 		SHA256URL string    `json:"sha256_url"`
+		Version   string    `json:"version"`
 	}
 	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
 		return fmt.Errorf("decode response: %w", err)
@@ -59,6 +60,7 @@ func BinaryList(ctx context.Context, nctx engine.NativeContext) error {
 		_, _ = dim.Fprintf(nctx.Stdout, "  size:   %d bytes\n", f.Size)
 		_, _ = dim.Fprintf(nctx.Stdout, "  mod:    %s\n", f.ModTime.Format(time.RFC3339))
 		_, _ = dim.Fprintf(nctx.Stdout, "  sha256: %s\n", f.SHA256)
+		_, _ = dim.Fprintf(nctx.Stdout, "  version: %s\n", f.Version)
 		_, _ = fmt.Fprintln(nctx.Stdout)
 	}
 	return nil

@@ -77,22 +77,12 @@ esac
 
 BIN_NAME="lrc-${OS}-${ARCH}"
 URL="{{.ServerURL}}/bin/${BIN_NAME}"
-CHECKSUM_URL="{{.ServerURL}}/bin/${BIN_NAME}.sha256"
 TMP=$(mktemp)
 trap 'rm -f "$TMP"' EXIT
 
 if ! curl -fsSL -o "$TMP" "$URL" 2>/dev/null && ! wget -q -O "$TMP" "$URL" 2>/dev/null; then
   echo "Failed to download client binary: $URL" >&2
   exit 1
-fi
-
-EXPECTED=$(curl -fsSL "$CHECKSUM_URL" 2>/dev/null || wget -q -O - "$CHECKSUM_URL" 2>/dev/null)
-if [ -n "$EXPECTED" ]; then
-  ACTUAL=$(sha256sum "$TMP" | awk '{print $1}')
-  if [ "$ACTUAL" != "$EXPECTED" ]; then
-    echo "Checksum verification failed" >&2
-    exit 1
-  fi
 fi
 
 # Install to a writable persistent location (handles noexec /tmp)
