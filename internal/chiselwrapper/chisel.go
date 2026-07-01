@@ -2,6 +2,7 @@ package chiselwrapper
 
 import (
 	"fmt"
+	"log/slog"
 	"net/http"
 
 	chserver "locrest-server/internal/chiselvendor/server"
@@ -24,10 +25,12 @@ func New() (*Chisel, error) {
 	if err != nil {
 		return nil, fmt.Errorf("new chisel server: %w", err)
 	}
-	return &Chisel{
+	ch := &Chisel{
 		server: s,
 		config: c,
-	}, nil
+	}
+	slog.Info("chisel server initialized", "fingerprint", ch.Fingerprint())
+	return ch, nil
 }
 
 // Handler returns the http.Handler for the chisel websocket endpoint.

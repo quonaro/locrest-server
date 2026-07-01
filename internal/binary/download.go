@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
 	"os"
 	"strings"
@@ -18,10 +19,12 @@ func downloadFile(ctx context.Context, client *http.Client, url, dst string) err
 	}
 	resp, err := client.Do(req)
 	if err != nil {
+		slog.Warn("binary download failed", "url", url, "error", err)
 		return fmt.Errorf("fetch %s: %w", url, err)
 	}
 	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusOK {
+		slog.Warn("binary download failed", "url", url, "status", resp.Status)
 		return fmt.Errorf("fetch %s: %s", url, resp.Status)
 	}
 
@@ -70,6 +73,7 @@ func verifyFile(filePath, checksumPath string) error {
 	}
 	got := hex.EncodeToString(h.Sum(nil))
 	if got != expected {
+		slog.Warn("binary checksum mismatch", "file", filePath, "got", got, "expected", expected)
 		return fmt.Errorf("checksum mismatch: got %s, want %s", got, expected)
 	}
 	return nil

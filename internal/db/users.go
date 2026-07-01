@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"time"
 
 	bolt "go.etcd.io/bbolt"
@@ -70,7 +71,7 @@ func (d *DB) ListUsers() ([]*User, error) {
 
 // CreateUser inserts a new user into the database.
 func (d *DB) CreateUser(user *User) error {
-	return d.Update(func(tx *bolt.Tx) error {
+	err := d.Update(func(tx *bolt.Tx) error {
 		b := tx.Bucket([]byte(bucketUsers))
 		if b == nil {
 			return fmt.Errorf("users bucket missing")
@@ -95,6 +96,11 @@ func (d *DB) CreateUser(user *User) error {
 		}
 		return nil
 	})
+	if err != nil {
+		return err
+	}
+	slog.Debug("user created", "username", user.Username)
+	return nil
 }
 
 // GetUserByToken looks up a user by their API bearer token.
@@ -147,7 +153,7 @@ func (d *DB) GetUserBySeedHash(hash string) (*User, error) {
 
 // UpdateUserToken atomically replaces a user's API token.
 func (d *DB) UpdateUserToken(username, newToken string) error {
-	return d.Update(func(tx *bolt.Tx) error {
+	err := d.Update(func(tx *bolt.Tx) error {
 		b := tx.Bucket([]byte(bucketUsers))
 		if b == nil {
 			return fmt.Errorf("users bucket missing")
@@ -178,11 +184,16 @@ func (d *DB) UpdateUserToken(username, newToken string) error {
 		}
 		return nil
 	})
+	if err != nil {
+		return err
+	}
+	slog.Debug("user token updated", "username", username)
+	return nil
 }
 
 // DeleteUser removes a user and their indexes.
 func (d *DB) DeleteUser(username string) error {
-	return d.Update(func(tx *bolt.Tx) error {
+	err := d.Update(func(tx *bolt.Tx) error {
 		b := tx.Bucket([]byte(bucketUsers))
 		if b == nil {
 			return fmt.Errorf("users bucket missing")
@@ -207,4 +218,9 @@ func (d *DB) DeleteUser(username string) error {
 		}
 		return nil
 	})
+	if err != nil {
+		return err
+	}
+	slog.Debug("user deleted", "username", username)
+	return nil
 }
