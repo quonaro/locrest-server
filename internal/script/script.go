@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"locrest-server/internal/auth"
+	"locrest-server/internal/binary"
 )
 
 // UserAgent constants for platform detection.
@@ -38,6 +39,7 @@ type Params struct {
 	ExtraFlags  string
 	HTTPAuth    string
 	Infinity    bool
+	Checksums   map[string]string
 }
 
 func wsURL(httpURL string) string {
@@ -77,7 +79,6 @@ esac
 
 BIN_NAME="lrc-${OS}-${ARCH}"
 URL="{{.ServerURL}}/bin/${BIN_NAME}"
-SHA_URL="${URL}.sha256"
 
 # Install to a writable persistent location (handles noexec /tmp)
 CACHE_DIR="${HOME}/.cache/locrest"
@@ -87,35 +88,36 @@ fi
 BIN="$CACHE_DIR/$BIN_NAME"
 
 TMP=$(mktemp)
-trap 'rm -f "$TMP" "$TMP.sha256"' EXIT
+trap 'rm -f "$TMP"' EXIT
+
+# Pick the right sha256 command once
+if command -v sha256sum >/dev/null 2>&1; then
+  SHA256_CMD="sha256sum"
+else
+  SHA256_CMD="shasum -a 256"
+fi
+
+EXPECTED=""
+case "${OS}_${ARCH}" in
+{{range $plat, $hash := .Checksums}}  {{$plat}}) EXPECTED="{{$hash}}" ;;
+{{end}}esac
 
 NEED_DOWNLOAD=1
-if [ -f "$BIN" ]; then
-  if curl -fsSL -o "$TMP.sha256" "$SHA_URL" 2>/dev/null || wget -q -O "$TMP.sha256" "$SHA_URL" 2>/dev/null; then
-    EXPECTED=$(awk '{print $1}' "$TMP.sha256")
-    if command -v sha256sum >/dev/null 2>&1; then
-      GOT=$(sha256sum "$BIN" | awk '{print $1}')
-    else
-      GOT=$(shasum -a 256 "$BIN" | awk '{print $1}')
-    fi
-    if [ "$GOT" = "$EXPECTED" ]; then
-      NEED_DOWNLOAD=0
-    fi
+if [ -f "$BIN" ] && [ -n "$EXPECTED" ]; then
+  GOT=$($SHA256_CMD "$BIN" | awk '{print $1}')
+  if [ "$GOT" = "$EXPECTED" ]; then
+    NEED_DOWNLOAD=0
   fi
 fi
 
 if [ "$NEED_DOWNLOAD" = "1" ]; then
+  echo "Downloading client binary..." >&2
   if ! curl -fsSL -o "$TMP" "$URL" 2>/dev/null && ! wget -q -O "$TMP" "$URL" 2>/dev/null; then
     echo "Failed to download client binary: $URL" >&2
     exit 1
   fi
-  if [ -f "$TMP.sha256" ]; then
-    EXPECTED=$(awk '{print $1}' "$TMP.sha256")
-    if command -v sha256sum >/dev/null 2>&1; then
-      GOT=$(sha256sum "$TMP" | awk '{print $1}')
-    else
-      GOT=$(shasum -a 256 "$TMP" | awk '{print $1}')
-    fi
+  if [ -n "$EXPECTED" ]; then
+    GOT=$($SHA256_CMD "$TMP" | awk '{print $1}')
     if [ "$GOT" != "$EXPECTED" ]; then
       echo "Binary checksum mismatch" >&2
       exit 1
@@ -162,12 +164,18 @@ done
 `))
 
 // Generate returns a rendered shell script for the given session.
-func Generate(serverURL string, sess *auth.Session, ua string, flags map[string]string, tokenTTL time.Duration, infinity bool) (string, error) {
+func Generate(serverURL string, sess *auth.Session, ua string, flags map[string]string, tokenTTL time.Duration, infinity bool, binaries []binary.FileInfo) (string, error) {
 	os := DetectOS(ua)
 	serverURL = strings.TrimRight(serverURL, "/")
 	extra := ""
 	if flags["debug"] == "true" {
 		extra = "-debug"
+	}
+	checksums := make(map[string]string)
+	for _, fi := range binaries {
+		plat := strings.TrimPrefix(fi.Name, "lrc-")
+		key := strings.ReplaceAll(plat, "-", "_")
+		checksums[key] = fi.SHA256
 	}
 	p := Params{
 		ServerURL:   shellEscape(serverURL),
@@ -182,6 +190,7 @@ func Generate(serverURL string, sess *auth.Session, ua string, flags map[string]
 		ExtraFlags:  extra,
 		HTTPAuth:    shellEscape(sess.HTTPAuth),
 		Infinity:    infinity,
+		Checksums:   checksums,
 	}
 	var buf strings.Builder
 	if err := scriptTemplate.Execute(&buf, p); err != nil {

@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"locrest-server/internal/auth"
+	"locrest-server/internal/binary"
 )
 
 func TestDetectOS(t *testing.T) {
@@ -71,7 +72,7 @@ func TestGenerate(t *testing.T) {
 		SetupToken: "setuptoken123",
 		HTTPAuth:   "user:pass",
 	}
-	scr, err := Generate("https://example.com", sess, "curl/7.68.0", nil, time.Hour, false)
+	scr, err := Generate("https://example.com", sess, "curl/7.68.0", nil, time.Hour, false, nil)
 	if err != nil {
 		t.Fatalf("Generate: %v", err)
 	}
@@ -94,6 +95,35 @@ func TestGenerate(t *testing.T) {
 	}
 }
 
+func TestGenerateChecksums(t *testing.T) {
+	sess := &auth.Session{
+		Subdomain:  "testsub",
+		LocalPort:  8080,
+		TargetHost: "localhost",
+		SetupToken: "setuptoken123",
+	}
+	bins := []binary.FileInfo{
+		{Name: "lrc-linux-amd64", SHA256: "abc123deadbeef"},
+		{Name: "lrc-darwin-arm64", SHA256: "deadbeefabc123"},
+	}
+	scr, err := Generate("https://example.com", sess, "curl/7.68.0", nil, time.Hour, false, bins)
+	if err != nil {
+		t.Fatalf("Generate: %v", err)
+	}
+	if !strings.Contains(scr, "linux_amd64)") {
+		t.Fatal("script missing linux_amd64 case")
+	}
+	if !strings.Contains(scr, "abc123deadbeef") {
+		t.Fatal("script missing linux-amd64 checksum")
+	}
+	if !strings.Contains(scr, "darwin_arm64)") {
+		t.Fatal("script missing darwin_arm64 case")
+	}
+	if !strings.Contains(scr, "deadbeefabc123") {
+		t.Fatal("script missing darwin-arm64 checksum")
+	}
+}
+
 func TestGenerateDebugFlag(t *testing.T) {
 	sess := &auth.Session{
 		Subdomain:  "testsub",
@@ -101,7 +131,7 @@ func TestGenerateDebugFlag(t *testing.T) {
 		TargetHost: "localhost",
 		SetupToken: "setuptoken123",
 	}
-	scr, err := Generate("https://example.com", sess, "wget/1.20.3", map[string]string{"debug": "true"}, time.Hour, false)
+	scr, err := Generate("https://example.com", sess, "wget/1.20.3", map[string]string{"debug": "true"}, time.Hour, false, nil)
 	if err != nil {
 		t.Fatalf("Generate: %v", err)
 	}
@@ -121,7 +151,7 @@ func TestGenerateEscapes(t *testing.T) {
 		SetupToken: "token",
 		HTTPAuth:   "user:pass",
 	}
-	scr, err := Generate("https://example.com/path", sess, "", nil, 30*time.Minute, false)
+	scr, err := Generate("https://example.com/path", sess, "", nil, 30*time.Minute, false, nil)
 	if err != nil {
 		t.Fatalf("Generate: %v", err)
 	}
@@ -138,7 +168,7 @@ func TestGenerateInfinity(t *testing.T) {
 		TargetHost: "localhost",
 		SetupToken: "token",
 	}
-	scr, err := Generate("https://example.com", sess, "curl/7.68.0", nil, 0, true)
+	scr, err := Generate("https://example.com", sess, "curl/7.68.0", nil, 0, true, nil)
 	if err != nil {
 		t.Fatalf("Generate: %v", err)
 	}
