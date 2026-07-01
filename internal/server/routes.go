@@ -2,6 +2,7 @@ package server
 
 import (
 	"fmt"
+	"log/slog"
 	"net"
 	"strings"
 )
@@ -28,6 +29,7 @@ func (f *Frontend) RegisterRoute(subdomain string, backendPort int) {
 	f.mu.Lock()
 	f.routes[subdomain] = backendPort
 	f.mu.Unlock()
+	slog.Debug("route registered", "subdomain", subdomain, "backend_port", backendPort)
 }
 
 // UnregisterRoute removes a subdomain mapping.
@@ -35,6 +37,7 @@ func (f *Frontend) UnregisterRoute(subdomain string) {
 	f.mu.Lock()
 	delete(f.routes, subdomain)
 	f.mu.Unlock()
+	slog.Debug("route unregistered", "subdomain", subdomain)
 }
 
 // isPortInUse reports whether any active route or TCP listener already uses the given port.

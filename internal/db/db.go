@@ -3,6 +3,7 @@ package db
 import (
 	"errors"
 	"fmt"
+	"log/slog"
 	"time"
 
 	bolt "go.etcd.io/bbolt"
@@ -30,14 +31,18 @@ func Open(path string) (*DB, error) {
 	db, err := bolt.Open(path, 0600, &bolt.Options{Timeout: 5 * time.Second})
 	if err != nil {
 		if errors.Is(err, bberr.ErrTimeout) {
+			slog.Error("database locked by another process")
 			return nil, fmt.Errorf("database is locked by another process; is the server already running?")
 		}
+		slog.Error("open db failed", "path", path, "error", err)
 		return nil, fmt.Errorf("open db: %w", err)
 	}
 	if err := initBuckets(db); err != nil {
 		_ = db.Close()
+		slog.Error("init db buckets failed", "path", path, "error", err)
 		return nil, fmt.Errorf("init buckets: %w", err)
 	}
+	slog.Info("db opened", "path", path)
 	return &DB{db}, nil
 }
 

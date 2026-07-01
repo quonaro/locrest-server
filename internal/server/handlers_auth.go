@@ -28,9 +28,11 @@ func (f *Frontend) handleStatus(w http.ResponseWriter, r *http.Request) {
 	}
 	_, ok := f.store.GetByPubkey(pubHex)
 	if !ok {
+		slog.Warn("status unknown pubkey", "pubkey_prefix", auth.TokenPrefix(pubHex))
 		http.Error(w, "Unknown pubkey", http.StatusUnauthorized)
 		return
 	}
+	slog.Debug("status check", "pubkey_prefix", auth.TokenPrefix(pubHex))
 	w.Header().Set("Content-Type", "application/json")
 	_, _ = w.Write([]byte(`{"alive":true}`))
 }
@@ -57,10 +59,12 @@ func (f *Frontend) handleRegister(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if !f.store.RegisterPubkey(req.SetupToken, req.PubKey) {
+		slog.Warn("register invalid or used setup token", "setup_token_prefix", auth.TokenPrefix(req.SetupToken))
 		http.Error(w, "Invalid or already used setup token", http.StatusConflict)
 		return
 	}
 
+	slog.Info("pubkey registered", "setup_token_prefix", auth.TokenPrefix(req.SetupToken), "pubkey_prefix", auth.TokenPrefix(req.PubKey))
 	w.Header().Set("Content-Type", "application/json")
 	_, _ = w.Write([]byte(`{"ok":true}`))
 }
@@ -71,7 +75,10 @@ func (f *Frontend) handleRegenerate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	cfg := f.cfg.Load()
-	if !f.regenerateRateLimiter.allow(clientIP(r, cfg.BehindProxy)) {
+	ip := clientIP(r, cfg.BehindProxy)
+	slog.Debug("regenerate request", "ip", ip)
+	if !f.regenerateRateLimiter.allow(ip) {
+		slog.Warn("regenerate rate limit exceeded", "ip", ip)
 		http.Error(w, "Rate limit exceeded", http.StatusTooManyRequests)
 		return
 	}
@@ -81,10 +88,12 @@ func (f *Frontend) handleRegenerate(w http.ResponseWriter, r *http.Request) {
 		SeedPhrase string `json:"seed_phrase"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		slog.Warn("regenerate bad request", "ip", ip, "error", err)
 		http.Error(w, "Bad request", http.StatusBadRequest)
 		return
 	}
 	if req.SeedPhrase == "" {
+		slog.Warn("regenerate missing seed phrase", "ip", ip)
 		http.Error(w, "Missing seed_phrase", http.StatusBadRequest)
 		return
 	}
@@ -92,20 +101,24 @@ func (f *Frontend) handleRegenerate(w http.ResponseWriter, r *http.Request) {
 	hash := db.HashSeedPhrase(req.SeedPhrase)
 	user, err := f.db.GetUserBySeedHash(hash)
 	if err != nil {
+		slog.Warn("regenerate invalid seed phrase", "ip", ip)
 		http.Error(w, "Invalid seed phrase", http.StatusUnauthorized)
 		return
 	}
 
 	newToken, err := auth.RandString(32)
 	if err != nil {
+		slog.Error("regenerate token generation failed", "ip", ip, "username", user.Username, "error", err)
 		http.Error(w, "Token generation failed", http.StatusInternalServerError)
 		return
 	}
 	if err := f.db.UpdateUserToken(user.Username, newToken); err != nil {
+		slog.Error("regenerate token update failed", "ip", ip, "username", user.Username, "error", err)
 		http.Error(w, "Token update failed", http.StatusInternalServerError)
 		return
 	}
 
+	slog.Info("token regenerated", "ip", ip, "username", user.Username)
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(map[string]string{"token": newToken})
 }
@@ -115,32 +128,40 @@ func (f *Frontend) handleChallenge(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
+	cfg := f.cfg.Load()
+	ip := clientIP(r, cfg.BehindProxy)
 	pubHex := r.URL.Query().Get("pubkey")
 	if pubHex == "" {
 		http.Error(w, "Missing pubkey", http.StatusBadRequest)
 		return
 	}
+	slog.Debug("challenge request", "ip", ip, "pubkey_prefix", auth.TokenPrefix(pubHex))
 	sess, ok := f.store.GetByPubkey(pubHex)
 	if !ok {
+		slog.Warn("challenge unknown pubkey", "ip", ip, "pubkey_prefix", auth.TokenPrefix(pubHex))
 		http.Error(w, "Unknown pubkey", http.StatusUnauthorized)
 		return
 	}
 	if sess.IsActivated() {
+		slog.Warn("challenge already activated", "ip", ip, "subdomain", sess.Subdomain)
 		http.Error(w, "Session already activated", http.StatusConflict)
 		return
 	}
 
 	nonce, err := auth.Nonce()
 	if err != nil {
+		slog.Error("challenge nonce generation failed", "ip", ip, "subdomain", sess.Subdomain, "error", err)
 		http.Error(w, "Nonce generation failed", http.StatusInternalServerError)
 		return
 	}
 	sess.SetNonce(nonce)
 	if err := f.store.UpdateNonce(sess.SetupToken, sess.Nonce, sess.NonceAt); err != nil {
+		slog.Error("challenge nonce update failed", "ip", ip, "subdomain", sess.Subdomain, "error", err)
 		http.Error(w, "Failed to update nonce", http.StatusInternalServerError)
 		return
 	}
 
+	slog.Debug("challenge issued", "ip", ip, "subdomain", sess.Subdomain, "server_port", sess.ServerPort)
 	resp := map[string]interface{}{
 		"nonce":       nonce,
 		"subdomain":   sess.Subdomain,
@@ -164,43 +185,51 @@ func (f *Frontend) handleVerify(w http.ResponseWriter, r *http.Request) {
 		Subdomain string `json:"subdomain"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		slog.Warn("verify bad request", "error", err)
 		http.Error(w, "Bad request", http.StatusBadRequest)
 		return
 	}
 
 	sess, ok := f.store.GetByPubkey(req.PubKey)
 	if !ok {
+		slog.Warn("verify unknown pubkey", "pubkey_prefix", auth.TokenPrefix(req.PubKey))
 		http.Error(w, "Unknown pubkey", http.StatusUnauthorized)
 		return
 	}
 	if sess.IsActivated() {
+		slog.Warn("verify already activated", "subdomain", sess.Subdomain)
 		http.Error(w, "Session already activated", http.StatusConflict)
 		return
 	}
 
 	sig, err := base64.StdEncoding.DecodeString(req.Signature)
 	if err != nil {
+		slog.Warn("verify bad signature encoding", "subdomain", sess.Subdomain)
 		http.Error(w, "Bad signature encoding", http.StatusBadRequest)
 		return
 	}
 
 	if !sess.ConsumeNonce(req.Nonce, 5*time.Minute) {
+		slog.Warn("verify invalid or expired nonce", "subdomain", sess.Subdomain)
 		http.Error(w, "Invalid or expired nonce", http.StatusUnauthorized)
 		return
 	}
 
 	pubBytes, err := hex.DecodeString(req.PubKey)
 	if err != nil || len(pubBytes) != ed25519.PublicKeySize {
+		slog.Warn("verify bad pubkey", "subdomain", sess.Subdomain, "error", err)
 		http.Error(w, "Bad pubkey", http.StatusBadRequest)
 		return
 	}
 
 	if !auth.VerifySignature(ed25519.PublicKey(pubBytes), []byte(req.Nonce), sig) {
+		slog.Warn("verify invalid signature", "subdomain", sess.Subdomain)
 		http.Error(w, "Invalid signature", http.StatusUnauthorized)
 		return
 	}
 
 	cfg := f.cfg.Load()
+	ip := clientIP(r, cfg.BehindProxy)
 	var perms config.Permissions
 	if sess.Role == "public" {
 		perms = cfg.Permissions.Public
@@ -208,22 +237,26 @@ func (f *Frontend) handleVerify(w http.ResponseWriter, r *http.Request) {
 		perms = cfg.Permissions.Auth
 	}
 	if sess.Mode == "tcp" && !perms.RawTCP {
+		slog.Warn("verify permission denied", "ip", ip, "subdomain", sess.Subdomain, "feature", "raw_tcp", "role", sess.Role)
 		f.store.Delete(sess.SetupToken)
 		http.Error(w, "Permission DENIED", http.StatusForbidden)
 		return
 	}
 	if sess.Mode == "http" && !perms.CreateTunnel {
+		slog.Warn("verify permission denied", "ip", ip, "subdomain", sess.Subdomain, "feature", "create_tunnel", "role", sess.Role)
 		f.store.Delete(sess.SetupToken)
 		http.Error(w, "Permission DENIED", http.StatusForbidden)
 		return
 	}
 	if sess.Infinity && !perms.Infinity {
+		slog.Warn("verify infinity not permitted", "ip", ip, "subdomain", sess.Subdomain, "role", sess.Role)
 		f.store.Delete(sess.SetupToken)
 		http.Error(w, "infinity tunnel not permitted for your role", http.StatusForbidden)
 		return
 	}
 
 	if err := f.chisel.AddUser(sess.Subdomain, sess.Token); err != nil {
+		slog.Error("verify chisel add user failed", "subdomain", sess.Subdomain, "error", err)
 		http.Error(w, "Failed to register user", http.StatusInternalServerError)
 		return
 	}
@@ -233,6 +266,7 @@ func (f *Frontend) handleVerify(w http.ResponseWriter, r *http.Request) {
 	}
 	sess.Activate()
 	if err := f.store.Activate(sess.SetupToken); err != nil {
+		slog.Error("verify session activation failed", "subdomain", sess.Subdomain, "error", err)
 		http.Error(w, "Failed to activate session", http.StatusInternalServerError)
 		return
 	}
@@ -249,6 +283,7 @@ func (f *Frontend) handleVerify(w http.ResponseWriter, r *http.Request) {
 		}(sess.ServerPort)
 	}
 
+	slog.Info("tunnel activated", "ip", ip, "subdomain", sess.Subdomain, "server_port", sess.ServerPort, "mode", sess.Mode, "role", sess.Role, "username", sess.Username)
 	resp := map[string]interface{}{
 		"token":       sess.Token,
 		"server_port": sess.ServerPort,

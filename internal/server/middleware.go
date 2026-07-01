@@ -2,6 +2,7 @@ package server
 
 import (
 	"fmt"
+	"log/slog"
 	"net"
 	"net/http"
 	"strings"
@@ -96,10 +97,12 @@ func (f *Frontend) ipFilterMiddleware(next http.Handler) http.Handler {
 		}
 		ip := clientIP(r, cfg.BehindProxy)
 		if len(cfg.AllowedIPs) > 0 && !ipAllowed(ip, cfg.AllowedIPs) {
+			slog.Warn("request from IP not in allowed list", "ip", ip, "path", r.URL.Path)
 			http.Error(w, "Forbidden", http.StatusForbidden)
 			return
 		}
 		if len(cfg.BlockedIPs) > 0 && ipAllowed(ip, cfg.BlockedIPs) {
+			slog.Warn("request from blocked IP", "ip", ip, "path", r.URL.Path)
 			http.Error(w, "Forbidden", http.StatusForbidden)
 			return
 		}

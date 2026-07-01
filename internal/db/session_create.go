@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"time"
 
 	bolt "go.etcd.io/bbolt"
@@ -102,6 +103,7 @@ func (d *DB) CreateSession(localPort, serverPort int, targetHost string, ttl tim
 	}); err != nil {
 		return nil, err
 	}
+	slog.Debug("session created", "subdomain", sess.Subdomain, "server_port", sess.ServerPort, "mode", sess.Mode, "role", sess.Role)
 	return &sess, nil
 }
 

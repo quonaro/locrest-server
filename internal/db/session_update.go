@@ -4,6 +4,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"time"
 
 	bolt "go.etcd.io/bbolt"
@@ -67,8 +68,16 @@ func (d *DB) DeleteSession(setupToken string) {
 		if len(sd.PubKey) > 0 {
 			_ = tx.Bucket([]byte(bucketSessionsByPubkey)).Delete([]byte(hex.EncodeToString(sd.PubKey)))
 		}
+		slog.Debug("session deleted", "subdomain", sd.Subdomain, "setup_token_prefix", setupToken[:min(8, len(setupToken))])
 		return nil
 	})
+}
+
+func min(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
 }
 
 // UpdateSessionNonce stores a fresh nonce and its timestamp for the given session.

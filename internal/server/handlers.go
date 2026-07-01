@@ -2,6 +2,7 @@ package server
 
 import (
 	"fmt"
+	"log/slog"
 	"net"
 	"net/http"
 	"strings"
@@ -44,11 +45,15 @@ func (f *Frontend) handleScript(w http.ResponseWriter, r *http.Request, localPor
 		role = "public"
 	}
 	cfg := f.cfg.Load()
-	if !f.rateLimiter.allow(clientIP(r, cfg.BehindProxy)) {
+	ip := clientIP(r, cfg.BehindProxy)
+	slog.Debug("script request", "ip", ip, "local_port", localPort, "mode", mode, "role", role)
+	if !f.rateLimiter.allow(ip) {
+		slog.Warn("rate limit exceeded", "ip", ip)
 		http.Error(w, "Rate limit exceeded", http.StatusTooManyRequests)
 		return
 	}
 	if cfg.MaxSessions > 0 && f.store.Len() >= cfg.MaxSessions {
+		slog.Warn("max sessions reached", "count", f.store.Len(), "limit", cfg.MaxSessions)
 		http.Error(w, "Server busy", http.StatusServiceUnavailable)
 		return
 	}
@@ -61,25 +66,30 @@ func (f *Frontend) handleScript(w http.ResponseWriter, r *http.Request, localPor
 	}
 
 	if httpAuth != "" && !perms.HTTPAuth {
+		slog.Warn("permission denied", "ip", ip, "feature", "http_auth", "role", role)
 		http.Error(w, "Permission DENIED", http.StatusForbidden)
 		return
 	}
 
 	if targetHost != "" && !perms.SetHost {
+		slog.Warn("permission denied", "ip", ip, "feature", "set_host", "role", role)
 		http.Error(w, "Permission DENIED", http.StatusForbidden)
 		return
 	}
 	if targetHost != "" && !f.isAllowedTunnelHost(targetHost) {
+		slog.Warn("target host not allowed", "ip", ip, "target_host", targetHost)
 		http.Error(w, "target host is not allowed", http.StatusBadRequest)
 		return
 	}
 
 	requestedSubdomain := r.URL.Query().Get("subdomain")
 	if requestedSubdomain != "" && !perms.SetSubdomain {
+		slog.Warn("permission denied", "ip", ip, "feature", "set_subdomain", "role", role)
 		http.Error(w, "Permission DENIED", http.StatusForbidden)
 		return
 	}
 	if requestedSubdomain != "" && f.isReservedSubdomain(requestedSubdomain) {
+		slog.Warn("subdomain is reserved", "ip", ip, "subdomain", requestedSubdomain)
 		http.Error(w, "subdomain is reserved", http.StatusBadRequest)
 		return
 	}
@@ -88,12 +98,14 @@ func (f *Frontend) handleScript(w http.ResponseWriter, r *http.Request, localPor
 	var allowedIPs []string
 	if allowedIPsRaw != "" {
 		if !perms.SetAllowedIPs {
+			slog.Warn("permission denied", "ip", ip, "feature", "set_allowed_ips", "role", role)
 			http.Error(w, "Permission DENIED", http.StatusForbidden)
 			return
 		}
 		var err error
 		allowedIPs, err = parseAllowedIPs(allowedIPsRaw)
 		if err != nil {
+			slog.Warn("invalid allowed_ips", "ip", ip, "error", err)
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
@@ -102,6 +114,7 @@ func (f *Frontend) handleScript(w http.ResponseWriter, r *http.Request, localPor
 	rolePublic := role == "public"
 	ttl, infinity, err := effectiveTTL(r, cfg, rolePublic)
 	if err != nil {
+		slog.Warn("invalid ttl", "ip", ip, "error", err)
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
@@ -110,6 +123,7 @@ func (f *Frontend) handleScript(w http.ResponseWriter, r *http.Request, localPor
 	if serverPort <= 0 {
 		serverPort = f.NextServerPort()
 	} else if f.isPortInUse(serverPort) {
+		slog.Warn("port already in use", "ip", ip, "server_port", serverPort)
 		http.Error(w, "Port already in use", http.StatusConflict)
 		return
 	}
@@ -127,6 +141,7 @@ func (f *Frontend) handleScript(w http.ResponseWriter, r *http.Request, localPor
 		} else if strings.Contains(msg, "subdomain must") || strings.Contains(msg, "subdomain must not") {
 			status = http.StatusBadRequest
 		}
+		slog.Error("session creation failed", "ip", ip, "error", err, "status", status)
 		http.Error(w, msg, status)
 		return
 	}
@@ -151,10 +166,12 @@ func (f *Frontend) handleScript(w http.ResponseWriter, r *http.Request, localPor
 	}
 	scr, err := script.Generate(serverURL, sess, r.UserAgent(), flags, ttl, infinity)
 	if err != nil {
+		slog.Error("script generation failed", "ip", ip, "subdomain", sess.Subdomain, "error", err)
 		http.Error(w, "Script generation failed", http.StatusInternalServerError)
 		return
 	}
 
+	slog.Info("script generated", "ip", ip, "subdomain", sess.Subdomain, "server_port", sess.ServerPort, "mode", sess.Mode, "role", sess.Role, "username", username)
 	w.Header().Set("Content-Type", "text/x-shellscript")
 	w.Header().Set("Content-Disposition", "attachment; filename=install.sh")
 	_, _ = w.Write([]byte(scr))

@@ -94,6 +94,14 @@ func VerifySignature(pub ed25519.PublicKey, msg, sig []byte) bool {
 	return ed25519.Verify(pub, msg, sig)
 }
 
+// TokenPrefix returns a short, non-sensitive prefix of a token for logging.
+func TokenPrefix(s string) string {
+	if len(s) <= 8 {
+		return s
+	}
+	return s[:8]
+}
+
 func randHex(n int) (string, error) {
 	b := make([]byte, n)
 	if _, err := rand.Read(b); err != nil {

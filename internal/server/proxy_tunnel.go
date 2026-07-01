@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"log/slog"
 	"net"
 	"net/http"
 	"net/http/httputil"
@@ -20,26 +21,32 @@ import (
 func (f *Frontend) proxyWebSocket(w http.ResponseWriter, r *http.Request) {
 	backendPort, subdomain, ok := f.resolveRoute(r.Host)
 	cfg := f.cfg.Load()
+	ip := clientIP(r, cfg.BehindProxy)
 	if !ok {
 		if cfg.RootPage && f.isRootHost(r.Host) {
 			f.handleRoot(w, r)
 			return
 		}
+		slog.Warn("websocket tunnel not found", "ip", ip, "host", r.Host)
 		f.sendHTMLError(w, r, http.StatusNotFound, "Tunnel Not Found", "No active tunnel for this host. The tunnel may have expired or the subdomain is incorrect.")
 		return
 	}
 	if !f.checkBasicAuth(w, r, subdomain) {
+		slog.Warn("websocket basic auth failed", "ip", ip, "subdomain", subdomain)
 		return
 	}
 	if !f.checkAllowedIPs(w, r, subdomain) {
+		slog.Warn("websocket IP not allowed", "ip", ip, "subdomain", subdomain)
 		return
 	}
 
 	pipeCh := tunnel.GetProxyPipe(backendPort)
 	if pipeCh == nil {
+		slog.Warn("websocket tunnel pipe missing", "ip", ip, "subdomain", subdomain, "backend_port", backendPort)
 		f.sendHTMLError(w, r, http.StatusNotFound, "Tunnel Not Found", "No active tunnel for this host. The tunnel may have expired or the subdomain is incorrect.")
 		return
 	}
+	slog.Debug("websocket proxy", "ip", ip, "subdomain", subdomain, "backend_port", backendPort)
 
 	dialer := websocket.Dialer{
 		NetDial: func(network, addr string) (net.Conn, error) {
@@ -162,26 +169,32 @@ func (f *Frontend) proxyWebSocket(w http.ResponseWriter, r *http.Request) {
 func (f *Frontend) proxyTunnel(w http.ResponseWriter, r *http.Request) {
 	backendPort, subdomain, ok := f.resolveRoute(r.Host)
 	cfg := f.cfg.Load()
+	ip := clientIP(r, cfg.BehindProxy)
 	if !ok {
 		if cfg.RootPage && f.isRootHost(r.Host) {
 			f.handleRoot(w, r)
 			return
 		}
+		slog.Warn("http tunnel not found", "ip", ip, "host", r.Host)
 		f.sendHTMLError(w, r, http.StatusNotFound, "Tunnel Not Found", "No active tunnel for this host. The tunnel may have expired or the subdomain is incorrect.")
 		return
 	}
 	if !f.checkBasicAuth(w, r, subdomain) {
+		slog.Warn("http basic auth failed", "ip", ip, "subdomain", subdomain)
 		return
 	}
 	if !f.checkAllowedIPs(w, r, subdomain) {
+		slog.Warn("http IP not allowed", "ip", ip, "subdomain", subdomain)
 		return
 	}
 
 	pipeCh := tunnel.GetProxyPipe(backendPort)
 	if pipeCh == nil {
+		slog.Warn("http tunnel pipe missing", "ip", ip, "subdomain", subdomain, "backend_port", backendPort)
 		f.sendHTMLError(w, r, http.StatusNotFound, "Tunnel Not Found", "No active tunnel for this host. The tunnel may have expired or the subdomain is incorrect.")
 		return
 	}
+	slog.Debug("http proxy", "ip", ip, "subdomain", subdomain, "backend_port", backendPort, "path", r.URL.Path)
 
 	tr := &http.Transport{
 		DialContext: func(ctx context.Context, network, addr string) (net.Conn, error) {

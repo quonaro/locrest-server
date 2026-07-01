@@ -77,4 +77,7 @@ func (f *Frontend) cleanStaleRoutesAndSessions() {
 		}
 		f.store.Delete(setupToken)
 	}
+	if len(staleRoutes) > 0 || len(expiredSessions) > 0 {
+		slog.Info("cleaner finished", "stale_routes", len(staleRoutes), "expired_sessions", len(expiredSessions))
+	}
 }
