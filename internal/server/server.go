@@ -42,6 +42,8 @@ type Frontend struct {
 	regenerateRateLimiter *rateLimiter
 	// serverPort -> raw TCP listener
 	tcpListeners map[int]net.Listener
+	// serverPort -> raw UDP conn
+	udpListeners map[int]*net.UDPConn
 	binCache     *binary.Cache
 }
 
@@ -58,6 +60,7 @@ func NewFrontend(cfg *config.ServerConfig, store *auth.Store, chisel *chiselwrap
 		rateLimiter:           newRateLimiter(cfg.Security.RateLimit.Requests, cfg.Security.RateLimit.Window),
 		regenerateRateLimiter: newRateLimiter(cfg.Security.RegenerateRateLimit.Requests, cfg.Security.RegenerateRateLimit.Window),
 		tcpListeners:          make(map[int]net.Listener),
+		udpListeners:          make(map[int]*net.UDPConn),
 		binCache:              binCache,
 	}
 	f.cfg.Store(cfg)
@@ -238,14 +241,14 @@ func (f *Frontend) handler(w http.ResponseWriter, r *http.Request) {
 
 	if m := portPathRegex.FindStringSubmatch(path); m != nil && r.Method == http.MethodGet {
 		localPort, _ := strconv.Atoi(m[1])
-		tcpPortStr := r.URL.Query().Get("tcp")
-		if tcpPortStr != "" {
-			if !perms.SetTCPPort {
+		externalPortStr := r.URL.Query().Get("external_port")
+		if externalPortStr != "" {
+			if !perms.SetExternalPort {
 				http.Error(w, "Permission DENIED", http.StatusForbidden)
 				return
 			}
-			remotePort, _ := strconv.Atoi(tcpPortStr)
-			f.handleScript(w, r, localPort, remotePort, targetHost, "tcp", httpAuth)
+			remotePort, _ := strconv.Atoi(externalPortStr)
+			f.handleScript(w, r, localPort, remotePort, targetHost, "tcp/udp", httpAuth)
 		} else {
 			f.handleScript(w, r, localPort, 0, targetHost, "http", httpAuth)
 		}
@@ -291,17 +294,20 @@ func (f *Frontend) ReloadChiselUsers() {
 		switch sess.Mode {
 		case "http":
 			f.RegisterRoute(sess.Subdomain, sess.ServerPort)
-		case "tcp":
-			go func(port int) {
+		case "tcp", "tcp/udp":
+			go func(port int, mode string) {
 				for i := 0; i < 50; i++ {
 					if tunnel.GetProxyPipe(port) != nil {
 						f.startTCPListener(port)
+						if mode == "tcp/udp" {
+							f.startUDPListener(port)
+						}
 						return
 					}
 					time.Sleep(100 * time.Millisecond)
 				}
-				slog.Warn("reload tcp: chisel pipe never created", "port", port)
-			}(sess.ServerPort)
+				slog.Warn("reload raw: chisel pipe never created", "port", port)
+			}(sess.ServerPort, sess.Mode)
 		}
 		slog.Debug("reloaded chisel user", "subdomain", sess.Subdomain, "mode", sess.Mode)
 	}

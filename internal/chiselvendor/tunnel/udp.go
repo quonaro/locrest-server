@@ -6,16 +6,17 @@ import (
 	"io"
 )
 
-type udpPacket struct {
+// UDPPacket is a gob-encodable UDP datagram.
+type UDPPacket struct {
 	Src     string
 	Payload []byte
 }
 
 func init() {
-	gob.Register(&udpPacket{})
+	gob.Register(&UDPPacket{})
 }
 
-//udpChannel encodes/decodes udp payloads over a stream
+// udpChannel encodes/decodes udp payloads over a stream
 type udpChannel struct {
 	r *gob.Decoder
 	w *gob.Encoder
@@ -23,13 +24,13 @@ type udpChannel struct {
 }
 
 func (o *udpChannel) encode(src string, b []byte) error {
-	return o.w.Encode(udpPacket{
+	return o.w.Encode(UDPPacket{
 		Src:     src,
 		Payload: b,
 	})
 }
 
-func (o *udpChannel) decode(p *udpPacket) error {
+func (o *udpChannel) decode(p *UDPPacket) error {
 	return o.r.Decode(p)
 }
 

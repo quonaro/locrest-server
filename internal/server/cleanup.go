@@ -53,8 +53,11 @@ func (f *Frontend) cleanStaleRoutesAndSessions() {
 		sess, ok := f.store.Get(setupToken)
 		if ok {
 			slog.Info("cleaner: deleting expired session", "subdomain", sess.Subdomain, "setup_token_prefix", sess.SetupToken[:8], "ttl", cfg.Tunnel.TTL)
-			if sess.Mode == "tcp" {
+			if sess.Mode == "tcp" || sess.Mode == "tcp/udp" {
 				f.closeTCPListener(sess.ServerPort)
+			}
+			if sess.Mode == "tcp/udp" {
+				f.closeUDPListener(sess.ServerPort)
 			}
 			f.chisel.DeleteUser(sess.Subdomain)
 		}

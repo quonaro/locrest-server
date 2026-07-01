@@ -63,12 +63,12 @@
       "default_auth": true,
       "description": "Whether the role can override the tunnel target host via ?host= query parameter."
     },
-    "set_tcp_port": {
+    "set_external_port": {
       "type": "boolean",
       "applies_to": ["public", "auth"],
       "default_public": false,
       "default_auth": true,
-      "description": "Whether the role can request a raw TCP tunnel via ?tcp= query parameter."
+      "description": "Whether the role can request a raw TCP/UDP tunnel via ?external_port= query parameter."
     },
     "set_mode": {
       "type": "boolean",

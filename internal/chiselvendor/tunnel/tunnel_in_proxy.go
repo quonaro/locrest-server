@@ -89,12 +89,12 @@ func UnregisterProxyPipe(port int) {
 	proxyPipesMu.Unlock()
 }
 
-//sshTunnel exposes a subset of Tunnel to subtypes
+// sshTunnel exposes a subset of Tunnel to subtypes
 type sshTunnel interface {
 	getSSH(ctx context.Context) ssh.Conn
 }
 
-//Proxy is the inbound portion of a Tunnel
+// Proxy is the inbound portion of a Tunnel
 type Proxy struct {
 	*cio.Logger
 	sshTun sshTunnel
@@ -106,7 +106,7 @@ type Proxy struct {
 	mu     sync.Mutex
 }
 
-//NewProxy creates a Proxy
+// NewProxy creates a Proxy
 func NewProxy(logger *cio.Logger, sshTun sshTunnel, index int, remote *settings.Remote) (*Proxy, error) {
 	id := index + 1
 	p := &Proxy{
@@ -133,14 +133,17 @@ func (p *Proxy) listen() error {
 	} else if p.remote.LocalProto == "tcp" {
 		p.pipe = newPipeListener()
 		p.Infof("Listening (pipe)")
+	} else if p.remote.LocalProto == "udp" {
+		p.pipe = newPipeListener()
+		p.Infof("Listening (udp pipe)")
 	} else {
 		return p.Errorf("unsupported local proto for pipe mode")
 	}
 	return nil
 }
 
-//Run enables the proxy and blocks while its active,
-//close the proxy by cancelling the context.
+// Run enables the proxy and blocks while its active,
+// close the proxy by cancelling the context.
 func (p *Proxy) Run(ctx context.Context) error {
 	if p.remote.Stdio {
 		return p.runStdio(ctx)

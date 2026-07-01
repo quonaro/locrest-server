@@ -31,7 +31,7 @@ func (t *Tunnel) handleUDP(l *cio.Logger, rwc io.ReadWriteCloser, hostPort strin
 	}
 	h.Debugf("UDP max size: %d bytes", h.maxMTU)
 	for {
-		p := udpPacket{}
+		p := UDPPacket{}
 		if err := h.handleWrite(&p); err != nil {
 			return err
 		}
@@ -46,7 +46,7 @@ type udpHandler struct {
 	maxMTU int
 }
 
-func (h *udpHandler) handleWrite(p *udpPacket) error {
+func (h *udpHandler) handleWrite(p *UDPPacket) error {
 	if err := h.r.Decode(&p); err != nil {
 		return err
 	}
@@ -77,7 +77,7 @@ func (h *udpHandler) handleWrite(p *udpPacket) error {
 	return nil
 }
 
-func (h *udpHandler) handleRead(p *udpPacket, conn *udpConn) {
+func (h *udpHandler) handleRead(p *UDPPacket, conn *udpConn) {
 	//ensure connection is cleaned up
 	defer h.udpConns.remove(conn.id)
 	buff := make([]byte, h.maxMTU)

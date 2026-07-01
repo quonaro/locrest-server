@@ -80,6 +80,9 @@ func UserAdd(ctx context.Context, nctx engine.NativeContext) error {
 	_, _ = cyan.Fprintf(nctx.Stdout, "  Create an authenticated tunnel")
 	_, _ = fmt.Fprintf(nctx.Stdout, " (replace 8080 with your local port):\n")
 	_, _ = dim.Fprintf(nctx.Stdout, "    curl --oauth2-bearer %s \"https://%s/8080?infinity=true\" | bash\n", result.APIToken, cfg.Network.Domain)
+	_, _ = cyan.Fprintf(nctx.Stdout, "  Create a raw TCP/UDP tunnel")
+	_, _ = fmt.Fprintf(nctx.Stdout, " (replace 8080 with your local port):\n")
+	_, _ = dim.Fprintf(nctx.Stdout, "    curl --oauth2-bearer %s \"https://%s/8080?external_port=8080\" | bash\n", result.APIToken, cfg.Network.Domain)
 
 	_, _ = fmt.Fprintln(nctx.Stdout)
 	_, _ = cyan.Fprintln(nctx.Stdout, "  Regenerate a lost API token using the seed phrase:")

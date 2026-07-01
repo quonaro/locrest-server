@@ -48,8 +48,8 @@ server:
     # Whitelist of target hosts clients may tunnel to.
     # Empty list allows any host (except blocked_tunnel_hosts).
     allowed_tunnel_hosts:
-      - "localhost"
-      - "127.0.0.1"
+    - "localhost"
+    - "127.0.0.1"
     # Hosts that are always rejected.
     blocked_tunnel_hosts: []
     # Strip ?error=... from proxied request URLs.
@@ -86,7 +86,7 @@ server:
       set_subdomain: false
       set_allowed_ips: false
       set_host: false
-      set_tcp_port: false
+      set_external_port: false
       set_mode: false
       infinity: false
     auth:
@@ -98,7 +98,7 @@ server:
       set_subdomain: true
       set_allowed_ips: true
       set_host: true
-      set_tcp_port: true
+      set_external_port: true
       set_mode: true
       infinity: true
 

@@ -42,17 +42,17 @@ type TLSConfig struct {
 
 // Permissions defines capabilities for a role (public or auth).
 type Permissions struct {
-	CreateTunnel  bool          `yaml:"create_tunnel"`
-	RawTCP        bool          `yaml:"raw_tcp"`
-	SetTTL        bool          `yaml:"set_ttl"`
-	MaxTTL        time.Duration `yaml:"max_ttl"`
-	HTTPAuth      bool          `yaml:"http_auth"`
-	SetSubdomain  bool          `yaml:"set_subdomain"`
-	SetAllowedIPs bool          `yaml:"set_allowed_ips"`
-	SetHost       bool          `yaml:"set_host"`
-	SetTCPPort    bool          `yaml:"set_tcp_port"`
-	SetMode       bool          `yaml:"set_mode"`
-	Infinity      bool          `yaml:"infinity"`
+	CreateTunnel    bool          `yaml:"create_tunnel"`
+	RawTCP          bool          `yaml:"raw_tcp"`
+	SetTTL          bool          `yaml:"set_ttl"`
+	MaxTTL          time.Duration `yaml:"max_ttl"`
+	HTTPAuth        bool          `yaml:"http_auth"`
+	SetSubdomain    bool          `yaml:"set_subdomain"`
+	SetAllowedIPs   bool          `yaml:"set_allowed_ips"`
+	SetHost         bool          `yaml:"set_host"`
+	SetExternalPort bool          `yaml:"set_external_port"`
+	SetMode         bool          `yaml:"set_mode"`
+	Infinity        bool          `yaml:"infinity"`
 }
 
 // PermissionsConfig holds permissions for public and authenticated users.
@@ -164,17 +164,17 @@ func DefaultConfig() *ServerConfig {
 				Infinity:     false,
 			},
 			Auth: Permissions{
-				CreateTunnel:  true,
-				RawTCP:        true,
-				SetTTL:        true,
-				MaxTTL:        7 * 24 * time.Hour,
-				HTTPAuth:      true,
-				SetSubdomain:  true,
-				SetAllowedIPs: true,
-				SetHost:       true,
-				SetTCPPort:    true,
-				SetMode:       true,
-				Infinity:      true,
+				CreateTunnel:    true,
+				RawTCP:          true,
+				SetTTL:          true,
+				MaxTTL:          7 * 24 * time.Hour,
+				HTTPAuth:        true,
+				SetSubdomain:    true,
+				SetAllowedIPs:   true,
+				SetHost:         true,
+				SetExternalPort: true,
+				SetMode:         true,
+				Infinity:        true,
 			},
 		},
 	}

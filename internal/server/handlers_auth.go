@@ -236,7 +236,7 @@ func (f *Frontend) handleVerify(w http.ResponseWriter, r *http.Request) {
 	} else {
 		perms = cfg.Permissions.Auth
 	}
-	if sess.Mode == "tcp" && !perms.RawTCP {
+	if (sess.Mode == "tcp" || sess.Mode == "tcp/udp") && !perms.RawTCP {
 		slog.Warn("verify permission denied", "ip", ip, "subdomain", sess.Subdomain, "feature", "raw_tcp", "role", sess.Role)
 		f.store.Delete(sess.SetupToken)
 		http.Error(w, "Permission DENIED", http.StatusForbidden)
@@ -270,17 +270,20 @@ func (f *Frontend) handleVerify(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Failed to activate session", http.StatusInternalServerError)
 		return
 	}
-	if sess.Mode == "tcp" {
-		go func(port int) {
+	if sess.Mode == "tcp" || sess.Mode == "tcp/udp" {
+		go func(port int, mode string) {
 			for i := 0; i < 50; i++ {
 				if tunnel.GetProxyPipe(port) != nil {
 					f.startTCPListener(port)
+					if mode == "tcp/udp" {
+						f.startUDPListener(port)
+					}
 					return
 				}
 				time.Sleep(100 * time.Millisecond)
 			}
-			slog.Warn("tcp raw: chisel pipe never created", "port", port)
-		}(sess.ServerPort)
+			slog.Warn("raw: chisel pipe never created", "port", port)
+		}(sess.ServerPort, sess.Mode)
 	}
 
 	slog.Info("tunnel activated", "ip", ip, "subdomain", sess.Subdomain, "server_port", sess.ServerPort, "mode", sess.Mode, "role", sess.Role, "username", sess.Username)
@@ -293,6 +296,9 @@ func (f *Frontend) handleVerify(w http.ResponseWriter, r *http.Request) {
 		"http_auth":   sess.HTTPAuth,
 		"authorized":  sess.Role != "public",
 		"username":    sess.Username,
+	}
+	if sess.Mode == "tcp/udp" {
+		resp["remote_udp"] = fmt.Sprintf("R:%d:%s:%d/udp", sess.ServerPort, sess.TargetHost, sess.LocalPort)
 	}
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(resp)
