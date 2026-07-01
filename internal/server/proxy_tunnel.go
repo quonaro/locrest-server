@@ -85,14 +85,14 @@ func (f *Frontend) proxyWebSocket(w http.ResponseWriter, r *http.Request) {
 		}
 		if resp != nil {
 			w.WriteHeader(resp.StatusCode)
-			io.Copy(w, resp.Body)
-			resp.Body.Close()
+			_, _ = io.Copy(w, resp.Body)
+			_ = resp.Body.Close()
 		} else {
 			f.sendHTMLError(w, r, http.StatusServiceUnavailable, "Service Offline", "Your local service is offline. Start it to enable this tunnel.")
 		}
 		return
 	}
-	defer backendConn.Close()
+	defer func() { _ = backendConn.Close() }()
 
 	upgrader := websocket.Upgrader{
 		CheckOrigin: func(r *http.Request) bool {
@@ -121,7 +121,7 @@ func (f *Frontend) proxyWebSocket(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		return
 	}
-	defer clientConn.Close()
+	defer func() { _ = clientConn.Close() }()
 
 	var wg sync.WaitGroup
 	wg.Add(2)
@@ -129,13 +129,13 @@ func (f *Frontend) proxyWebSocket(w http.ResponseWriter, r *http.Request) {
 	go func() {
 		defer wg.Done()
 		for {
-			backendConn.SetReadDeadline(time.Now().Add(pipeTimeout))
+			_ = backendConn.SetReadDeadline(time.Now().Add(pipeTimeout))
 			mt, msg, err := backendConn.ReadMessage()
 			if err != nil {
-				clientConn.Close()
+				_ = clientConn.Close()
 				return
 			}
-			clientConn.SetWriteDeadline(time.Now().Add(pipeTimeout))
+			_ = clientConn.SetWriteDeadline(time.Now().Add(pipeTimeout))
 			if err := clientConn.WriteMessage(mt, msg); err != nil {
 				return
 			}
@@ -144,13 +144,13 @@ func (f *Frontend) proxyWebSocket(w http.ResponseWriter, r *http.Request) {
 	go func() {
 		defer wg.Done()
 		for {
-			clientConn.SetReadDeadline(time.Now().Add(pipeTimeout))
+			_ = clientConn.SetReadDeadline(time.Now().Add(pipeTimeout))
 			mt, msg, err := clientConn.ReadMessage()
 			if err != nil {
-				backendConn.Close()
+				_ = backendConn.Close()
 				return
 			}
-			backendConn.SetWriteDeadline(time.Now().Add(pipeTimeout))
+			_ = backendConn.SetWriteDeadline(time.Now().Add(pipeTimeout))
 			if err := backendConn.WriteMessage(mt, msg); err != nil {
 				return
 			}

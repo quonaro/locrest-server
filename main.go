@@ -73,7 +73,7 @@ func buildApp() (*engine.App, error) {
 func main() {
 	configPath, args := parseConfigFlag(os.Args[1:])
 	if configPath != "" {
-		os.Setenv("LOCREST_CONFIG", configPath)
+		_ = os.Setenv("LOCREST_CONFIG", configPath)
 	}
 
 	args, showVersion, showHelp := parseGlobalFlags(args)
@@ -85,7 +85,7 @@ func main() {
 	if showHelp {
 		app, err := buildApp()
 		if err != nil {
-			color.New(color.FgRed).Fprintf(os.Stderr, "config: %v\n", err)
+			_, _ = color.New(color.FgRed).Fprintf(os.Stderr, "config: %v\n", err)
 			os.Exit(1)
 		}
 		app.PrintGroupHelp(nil)
@@ -94,7 +94,7 @@ func main() {
 
 	app, err := buildApp()
 	if err != nil {
-		color.New(color.FgRed).Fprintf(os.Stderr, "config: %v\n", err)
+		_, _ = color.New(color.FgRed).Fprintf(os.Stderr, "config: %v\n", err)
 		os.Exit(1)
 	}
 
@@ -109,7 +109,7 @@ func main() {
 			app.PrintGroupHelp(groupErr.Groups)
 			return
 		}
-		color.New(color.FgRed).Fprintln(os.Stderr, err)
+		_, _ = color.New(color.FgRed).Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
 }

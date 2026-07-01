@@ -40,10 +40,10 @@ func initChecksums() {
 		}
 		h := sha256.New()
 		if _, err := io.Copy(h, f); err != nil {
-			f.Close()
+			_ = f.Close()
 			continue
 		}
-		f.Close()
+		_ = f.Close()
 		checksums[entry.Name()] = hex.EncodeToString(h.Sum(nil))
 	}
 }
@@ -61,7 +61,7 @@ func ServeBinary(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	stat, _ := f.Stat()
 	w.Header().Set("Content-Type", "application/octet-stream")
@@ -70,7 +70,7 @@ func ServeBinary(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Length", fmt.Sprintf("%d", stat.Size()))
 	}
 
-	io.Copy(w, f)
+	_, _ = io.Copy(w, f)
 }
 
 // ServeChecksum serves the SHA-256 hex checksum for a binary.
@@ -86,7 +86,7 @@ func ServeChecksum(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.Header().Set("Content-Type", "text/plain")
-	w.Write([]byte(sum))
+	_, _ = w.Write([]byte(sum))
 }
 
 // NewHandler returns an http.HandlerFunc that routes /bin/ requests.

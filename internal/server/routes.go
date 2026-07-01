@@ -18,7 +18,7 @@ func (f *Frontend) NextServerPort() int {
 		if err != nil {
 			continue
 		}
-		ln.Close()
+		_ = ln.Close()
 		return port
 	}
 }

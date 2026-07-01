@@ -8,13 +8,13 @@ import (
 
 func TestUserCRUD(t *testing.T) {
 	path := "test_users.db"
-	defer os.Remove(path)
+	defer func() { _ = os.Remove(path) }()
 
 	db, err := Open(path)
 	if err != nil {
 		t.Fatalf("open db: %v", err)
 	}
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	u := &User{
 		Username:       "alice",
@@ -61,13 +61,13 @@ func TestUserCRUD(t *testing.T) {
 
 func TestSessionCRUD(t *testing.T) {
 	path := "test_sessions.db"
-	defer os.Remove(path)
+	defer func() { _ = os.Remove(path) }()
 
 	db, err := Open(path)
 	if err != nil {
 		t.Fatalf("open db: %v", err)
 	}
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	sess, err := db.CreateSession(8080, 30001, "localhost", time.Hour, false, 8, "http", "public", "", "", nil, "")
 	if err != nil {
@@ -122,13 +122,13 @@ func TestSessionCRUD(t *testing.T) {
 
 func TestSessionAllowedIPs(t *testing.T) {
 	path := "test_sessions_ips.db"
-	defer os.Remove(path)
+	defer func() { _ = os.Remove(path) }()
 
 	db, err := Open(path)
 	if err != nil {
 		t.Fatalf("open db: %v", err)
 	}
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	ips := []string{"192.168.1.0/24", "127.0.0.1/32"}
 	sess, err := db.CreateSession(8080, 30001, "localhost", time.Hour, false, 8, "http", "public", "", "", ips, "")
@@ -152,13 +152,13 @@ func TestSessionAllowedIPs(t *testing.T) {
 
 func TestInvalidateExpiredUsersSkipsZeroExpire(t *testing.T) {
 	path := "test_cleanup.db"
-	defer os.Remove(path)
+	defer func() { _ = os.Remove(path) }()
 
 	db, err := Open(path)
 	if err != nil {
 		t.Fatalf("open db: %v", err)
 	}
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	user := &User{
 		Username:       "alice",

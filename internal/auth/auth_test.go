@@ -2,7 +2,6 @@ package auth
 
 import (
 	"crypto/ed25519"
-	"encoding/base64"
 	"testing"
 )
 
@@ -84,7 +83,5 @@ func TestRandHex(t *testing.T) {
 	if len(s) != 64 {
 		t.Fatalf("randHex(32) length = %d, want 64", len(s))
 	}
-	if _, err := base64.StdEncoding.DecodeString(s); err == nil {
-		// hex strings should not be valid base64 in general; we just check length
-	}
+	// hex strings should not be valid base64 in general; we just check length
 }

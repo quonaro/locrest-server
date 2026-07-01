@@ -31,7 +31,7 @@ func StartServer(ctx context.Context, nctx engine.NativeContext) error {
 	if err != nil {
 		return err
 	}
-	defer database.Close()
+	defer func() { _ = database.Close() }()
 
 	store := auth.NewStore(database)
 	chisel, err := chiselwrapper.New()
@@ -39,7 +39,7 @@ func StartServer(ctx context.Context, nctx engine.NativeContext) error {
 		return fmt.Errorf("chisel init: %w", err)
 	}
 
-	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	ctx, stop := signal.NotifyContext(ctx, os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
 	database.StartCleaner(ctx, 30*time.Second)

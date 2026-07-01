@@ -1,16 +1,11 @@
 package server
 
 import (
-	"context"
 	"net/http"
 	"strings"
 
 	"locrest-server/internal/db"
 )
-
-type contextKey string
-
-const userContextKey contextKey = "auth_user"
 
 // bearerUser extracts the user from the Authorization: Bearer header.
 // It returns nil if the header is missing, malformed, or the token is invalid/expired.
@@ -32,22 +27,4 @@ func bearerUser(r *http.Request, database *db.DB) *db.User {
 		return nil
 	}
 	return user
-}
-
-// requireBearer checks the Authorization: Bearer header and writes 403 on failure.
-// On success it stores the user in the request context and returns true.
-func requireBearer(w http.ResponseWriter, r *http.Request, database *db.DB) (*http.Request, bool) {
-	user := bearerUser(r, database)
-	if user == nil {
-		http.Error(w, "Permission DENIED", http.StatusForbidden)
-		return r, false
-	}
-	ctx := context.WithValue(r.Context(), userContextKey, user)
-	return r.WithContext(ctx), true
-}
-
-// contextUser returns the authenticated user from the request context, or nil.
-func contextUser(r *http.Request) *db.User {
-	u, _ := r.Context().Value(userContextKey).(*db.User)
-	return u
 }

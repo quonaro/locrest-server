@@ -71,7 +71,7 @@ func TestServeChecksum(t *testing.T) {
 		t.Fatalf("status = %d, want 200", rec.Code)
 	}
 	h := sha256.New()
-	io.WriteString(h, "linux-amd64\n")
+	_, _ = io.WriteString(h, "linux-amd64\n")
 	expected := hex.EncodeToString(h.Sum(nil))
 	if rec.Body.String() != expected {
 		t.Fatalf("checksum = %q, want %q", rec.Body.String(), expected)

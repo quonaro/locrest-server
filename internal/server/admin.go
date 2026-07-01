@@ -88,7 +88,7 @@ func (f *Frontend) handleAdminCreateUser(w http.ResponseWriter, r *http.Request)
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(adminUserResponse{
+	_ = json.NewEncoder(w).Encode(adminUserResponse{
 		Username:   req.Username,
 		APIToken:   apiToken,
 		SeedPhrase: seedPhrase,
@@ -134,7 +134,7 @@ func (f *Frontend) handleAdminRegenerate(w http.ResponseWriter, r *http.Request)
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]string{"api_token": newToken})
+	_ = json.NewEncoder(w).Encode(map[string]string{"api_token": newToken})
 }
 
 func (f *Frontend) handleAdminShowUser(w http.ResponseWriter, r *http.Request) {
@@ -149,7 +149,7 @@ func (f *Frontend) handleAdminShowUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(adminUserResponse{
+	_ = json.NewEncoder(w).Encode(adminUserResponse{
 		Username:       user.Username,
 		APIToken:       user.APIToken,
 		SeedPhraseHash: user.SeedPhraseHash,
@@ -175,7 +175,7 @@ func (f *Frontend) handleAdminListUsers(w http.ResponseWriter, r *http.Request) 
 		}
 	}
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(resp)
+	_ = json.NewEncoder(w).Encode(resp)
 }
 
 func (f *Frontend) handleAdminReload(w http.ResponseWriter, r *http.Request) {

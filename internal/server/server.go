@@ -23,10 +23,7 @@ import (
 	"locrest-server/internal/logger"
 )
 
-var (
-	portPathRegex  = regexp.MustCompile(`^/(\d+)$`)
-	portsPathRegex = regexp.MustCompile(`^/(\d+)/(\d+)$`)
-)
+var portPathRegex = regexp.MustCompile(`^/(\d+)$`)
 
 // Frontend is the public HTTP/HTTPS server that dispenses scripts,
 // handles challenge-response, and reverse-proxies traffic into active tunnels.
@@ -133,7 +130,7 @@ func (f *Frontend) Run(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("admin socket: %w", err)
 	}
-	defer adminLn.Close()
+	defer func() { _ = adminLn.Close() }()
 	if err := os.Chmod(f.adminSocketPath, 0600); err != nil {
 		return fmt.Errorf("admin socket chmod: %w", err)
 	}

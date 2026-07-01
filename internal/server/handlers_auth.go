@@ -32,7 +32,7 @@ func (f *Frontend) handleStatus(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
-	w.Write([]byte(`{"alive":true}`))
+	_, _ = w.Write([]byte(`{"alive":true}`))
 }
 
 func (f *Frontend) handleRegister(w http.ResponseWriter, r *http.Request) {
@@ -62,7 +62,7 @@ func (f *Frontend) handleRegister(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	w.Write([]byte(`{"ok":true}`))
+	_, _ = w.Write([]byte(`{"ok":true}`))
 }
 
 func (f *Frontend) handleRegenerate(w http.ResponseWriter, r *http.Request) {
@@ -107,7 +107,7 @@ func (f *Frontend) handleRegenerate(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]string{"token": newToken})
+	_ = json.NewEncoder(w).Encode(map[string]string{"token": newToken})
 }
 
 func (f *Frontend) handleChallenge(w http.ResponseWriter, r *http.Request) {
@@ -147,7 +147,7 @@ func (f *Frontend) handleChallenge(w http.ResponseWriter, r *http.Request) {
 		"server_port": sess.ServerPort,
 	}
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(resp)
+	_ = json.NewEncoder(w).Encode(resp)
 }
 
 func (f *Frontend) handleVerify(w http.ResponseWriter, r *http.Request) {
@@ -260,5 +260,5 @@ func (f *Frontend) handleVerify(w http.ResponseWriter, r *http.Request) {
 		"username":    sess.Username,
 	}
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(resp)
+	_ = json.NewEncoder(w).Encode(resp)
 }

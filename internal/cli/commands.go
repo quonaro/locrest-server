@@ -83,7 +83,7 @@ func SoftReload(ctx context.Context, nctx engine.NativeContext) error {
 	if err != nil {
 		return fmt.Errorf("admin request failed: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusNoContent {
 		return fmt.Errorf("reload failed: %s", resp.Status)
 	}

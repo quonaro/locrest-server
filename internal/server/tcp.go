@@ -6,16 +6,8 @@ import (
 	tunnel "locrest-server/internal/chiselvendor/tunnel"
 	"log/slog"
 	"net"
-	"net/http"
-	"strings"
 	"sync"
 )
-
-// isCurlLikeRequest returns true for curl/wget user-agents.
-func isCurlLikeRequest(r *http.Request) bool {
-	ua := strings.ToLower(r.UserAgent())
-	return strings.Contains(ua, "curl") || strings.Contains(ua, "wget")
-}
 
 func (f *Frontend) startTCPListener(port int) {
 	addr := fmt.Sprintf(":%d", port)
@@ -29,7 +21,7 @@ func (f *Frontend) startTCPListener(port int) {
 	f.mu.Unlock()
 
 	defer func() {
-		ln.Close()
+		_ = ln.Close()
 		f.mu.Lock()
 		delete(f.tcpListeners, port)
 		f.mu.Unlock()
@@ -44,24 +36,24 @@ func (f *Frontend) startTCPListener(port int) {
 		}
 		pipeCh := tunnel.GetProxyPipe(port)
 		if pipeCh == nil {
-			conn.Close()
+			_ = conn.Close()
 			continue
 		}
 		clientPipe, serverPipe := net.Pipe()
 		select {
 		case pipeCh <- serverPipe:
 		default:
-			clientPipe.Close()
-			conn.Close()
+			_ = clientPipe.Close()
+			_ = conn.Close()
 			continue
 		}
 		go func(c net.Conn) {
-			defer clientPipe.Close()
-			defer c.Close()
+			defer func() { _ = clientPipe.Close() }()
+			defer func() { _ = c.Close() }()
 			var wg sync.WaitGroup
 			wg.Add(2)
-			go func() { io.Copy(clientPipe, c); wg.Done() }()
-			go func() { io.Copy(c, clientPipe); wg.Done() }()
+			go func() { _, _ = io.Copy(clientPipe, c); wg.Done() }()
+			go func() { _, _ = io.Copy(c, clientPipe); wg.Done() }()
 			wg.Wait()
 		}(conn)
 	}
@@ -73,7 +65,7 @@ func (f *Frontend) closeTCPListener(port int) {
 	delete(f.tcpListeners, port)
 	f.mu.Unlock()
 	if ln != nil {
-		ln.Close()
+		_ = ln.Close()
 		slog.Debug("tcp raw listener closed", "port", port)
 	}
 }

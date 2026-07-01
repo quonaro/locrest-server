@@ -40,7 +40,7 @@ func UserAdd(ctx context.Context, nctx engine.NativeContext) error {
 	if err != nil {
 		return fmt.Errorf("admin request failed: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode == http.StatusConflict {
 		return fmt.Errorf("user %q already exists", username)
@@ -66,28 +66,28 @@ func UserAdd(ctx context.Context, nctx engine.NativeContext) error {
 	magenta := color.New(color.FgMagenta)
 	dim := color.New(color.FgHiBlack)
 
-	greenBold.Fprintf(nctx.Stdout, "User created: %s\n\n", result.Username)
+	_, _ = greenBold.Fprintf(nctx.Stdout, "User created: %s\n\n", result.Username)
 
-	magenta.Fprintln(nctx.Stdout, "Credentials")
-	cyan.Fprintf(nctx.Stdout, "  API token:   ")
-	yellow.Fprintln(nctx.Stdout, result.APIToken)
-	cyan.Fprintf(nctx.Stdout, "  Seed phrase: ")
-	yellow.Fprintln(nctx.Stdout, result.SeedPhrase)
-	dim.Fprintln(nctx.Stdout, "  Save these values. The seed phrase is the only way to recover a lost token.")
+	_, _ = magenta.Fprintln(nctx.Stdout, "Credentials")
+	_, _ = cyan.Fprintf(nctx.Stdout, "  API token:   ")
+	_, _ = yellow.Fprintln(nctx.Stdout, result.APIToken)
+	_, _ = cyan.Fprintf(nctx.Stdout, "  Seed phrase: ")
+	_, _ = yellow.Fprintln(nctx.Stdout, result.SeedPhrase)
+	_, _ = dim.Fprintln(nctx.Stdout, "  Save these values. The seed phrase is the only way to recover a lost token.")
 
-	fmt.Fprintln(nctx.Stdout)
-	magenta.Fprintln(nctx.Stdout, "Usage")
-	cyan.Fprintf(nctx.Stdout, "  Create an authenticated tunnel")
-	fmt.Fprintf(nctx.Stdout, " (replace 8080 with your local port):\n")
-	dim.Fprintf(nctx.Stdout, "    curl -H \"Authorization: Bearer %s\" https://%s/8080?infinity=true | bash\n", result.APIToken, cfg.Domain)
+	_, _ = fmt.Fprintln(nctx.Stdout)
+	_, _ = magenta.Fprintln(nctx.Stdout, "Usage")
+	_, _ = cyan.Fprintf(nctx.Stdout, "  Create an authenticated tunnel")
+	_, _ = fmt.Fprintf(nctx.Stdout, " (replace 8080 with your local port):\n")
+	_, _ = dim.Fprintf(nctx.Stdout, "    curl -H \"Authorization: Bearer %s\" https://%s/8080?infinity=true | bash\n", result.APIToken, cfg.Domain)
 
-	fmt.Fprintln(nctx.Stdout)
-	cyan.Fprintln(nctx.Stdout, "  Regenerate a lost API token using the seed phrase:")
-	dim.Fprintf(nctx.Stdout, "    curl -X POST -H \"Content-Type: application/json\" -d '{\"seed_phrase\":\"%s\"}' https://%s/regenerate\n", result.SeedPhrase, cfg.Domain)
+	_, _ = fmt.Fprintln(nctx.Stdout)
+	_, _ = cyan.Fprintln(nctx.Stdout, "  Regenerate a lost API token using the seed phrase:")
+	_, _ = dim.Fprintf(nctx.Stdout, "    curl -X POST -H \"Content-Type: application/json\" -d '{\"seed_phrase\":\"%s\"}' https://%s/regenerate\n", result.SeedPhrase, cfg.Domain)
 
-	fmt.Fprintln(nctx.Stdout)
-	dim.Fprintln(nctx.Stdout, "Note: the client binary does not use the API token directly.")
-	dim.Fprintln(nctx.Stdout, "      The script above passes a temporary setup-token to the client automatically.")
+	_, _ = fmt.Fprintln(nctx.Stdout)
+	_, _ = dim.Fprintln(nctx.Stdout, "Note: the client binary does not use the API token directly.")
+	_, _ = dim.Fprintln(nctx.Stdout, "      The script above passes a temporary setup-token to the client automatically.")
 	return nil
 }
 
@@ -111,7 +111,7 @@ func UserDelete(ctx context.Context, nctx engine.NativeContext) error {
 	if err != nil {
 		return fmt.Errorf("admin request failed: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode == http.StatusNotFound {
 		return fmt.Errorf("user %q not found", username)
@@ -121,8 +121,8 @@ func UserDelete(ctx context.Context, nctx engine.NativeContext) error {
 		return fmt.Errorf("admin request failed: %s: %s", resp.Status, string(data))
 	}
 
-	color.New(color.FgRed, color.Bold).Fprint(nctx.Stdout, "User deleted: ")
-	color.New(color.FgYellow).Fprintln(nctx.Stdout, username)
+	_, _ = color.New(color.FgRed, color.Bold).Fprint(nctx.Stdout, "User deleted: ")
+	_, _ = color.New(color.FgYellow).Fprintln(nctx.Stdout, username)
 	return nil
 }
 
@@ -146,7 +146,7 @@ func UserRegenerate(ctx context.Context, nctx engine.NativeContext) error {
 	if err != nil {
 		return fmt.Errorf("admin request failed: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode == http.StatusNotFound {
 		return fmt.Errorf("user %q not found", username)
@@ -164,10 +164,10 @@ func UserRegenerate(ctx context.Context, nctx engine.NativeContext) error {
 	}
 
 	greenBold := color.New(color.FgGreen, color.Bold)
-	greenBold.Fprintf(nctx.Stdout, "Token regenerated for ")
-	color.New(color.FgYellow).Fprintln(nctx.Stdout, username)
-	color.New(color.FgCyan).Fprint(nctx.Stdout, "New API token: ")
-	color.New(color.FgYellow).Fprintln(nctx.Stdout, result.APIToken)
+	_, _ = greenBold.Fprintf(nctx.Stdout, "Token regenerated for ")
+	_, _ = color.New(color.FgYellow).Fprintln(nctx.Stdout, username)
+	_, _ = color.New(color.FgCyan).Fprint(nctx.Stdout, "New API token: ")
+	_, _ = color.New(color.FgYellow).Fprintln(nctx.Stdout, result.APIToken)
 	return nil
 }
 
@@ -191,7 +191,7 @@ func UserShow(ctx context.Context, nctx engine.NativeContext) error {
 	if err != nil {
 		return fmt.Errorf("admin request failed: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode == http.StatusNotFound {
 		return fmt.Errorf("user %q not found", username)
@@ -231,7 +231,7 @@ func UserList(ctx context.Context, nctx engine.NativeContext) error {
 	if err != nil {
 		return fmt.Errorf("admin request failed: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
 		data, _ := io.ReadAll(resp.Body)
@@ -250,7 +250,7 @@ func UserList(ctx context.Context, nctx engine.NativeContext) error {
 	}
 
 	if len(result) == 0 {
-		color.New(color.FgHiBlack).Fprintln(nctx.Stdout, "No users")
+		_, _ = color.New(color.FgHiBlack).Fprintln(nctx.Stdout, "No users")
 		return nil
 	}
 
@@ -261,13 +261,13 @@ func UserList(ctx context.Context, nctx engine.NativeContext) error {
 }
 
 func printUser(nctx engine.NativeContext, username, apiToken string, createdAt, expire time.Time) {
-	color.New(color.FgCyan).Fprint(nctx.Stdout, "username: ")
-	color.New(color.FgYellow).Fprintln(nctx.Stdout, username)
-	color.New(color.FgCyan).Fprint(nctx.Stdout, "  api_token:  ")
-	color.New(color.FgYellow).Fprintln(nctx.Stdout, apiToken)
-	color.New(color.FgHiBlack).Fprintf(nctx.Stdout, "  created_at: %s\n", createdAt.Format(time.RFC3339))
+	_, _ = color.New(color.FgCyan).Fprint(nctx.Stdout, "username: ")
+	_, _ = color.New(color.FgYellow).Fprintln(nctx.Stdout, username)
+	_, _ = color.New(color.FgCyan).Fprint(nctx.Stdout, "  api_token:  ")
+	_, _ = color.New(color.FgYellow).Fprintln(nctx.Stdout, apiToken)
+	_, _ = color.New(color.FgHiBlack).Fprintf(nctx.Stdout, "  created_at: %s\n", createdAt.Format(time.RFC3339))
 	if !expire.IsZero() {
-		color.New(color.FgHiBlack).Fprintf(nctx.Stdout, "  expire:     %s\n", expire.Format(time.RFC3339))
+		_, _ = color.New(color.FgHiBlack).Fprintf(nctx.Stdout, "  expire:     %s\n", expire.Format(time.RFC3339))
 	}
-	fmt.Fprintln(nctx.Stdout)
+	_, _ = fmt.Fprintln(nctx.Stdout)
 }

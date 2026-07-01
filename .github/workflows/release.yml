@@ -9,7 +9,32 @@ permissions:
   contents: write
 
 jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    - uses: actions/setup-go@v5
+      with:
+        go-version-file: go.mod
+    - run: go test ./...
+    - run: |
+        VERSION="$(git describe --tags --always --dirty 2>/dev/null || echo dev)"
+        COMMIT="$(git rev-parse --short HEAD 2>/dev/null || echo unknown)"
+        go build -ldflags="-s -w -X main.version=${VERSION} -X main.commit=${COMMIT}" -o lrs .
+
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    - uses: actions/setup-go@v5
+      with:
+        go-version-file: go.mod
+    - uses: golangci/golangci-lint-action@v9
+      with:
+        version: v2.12.2
+
   build:
+    needs: [ test, lint ]
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v4
@@ -37,7 +62,7 @@ jobs:
         path: dist/*
 
   release:
-    needs: build
+    needs: [ build, test, lint ]
     runs-on: ubuntu-latest
     steps:
     - name: Download artifacts

@@ -38,7 +38,7 @@ func newTestFrontend(t *testing.T, cfg *config.ServerConfig) *Frontend {
 	if err != nil {
 		t.Fatalf("open db: %v", err)
 	}
-	t.Cleanup(func() { database.Close() })
+	t.Cleanup(func() { _ = database.Close() })
 	store := auth.NewStore(database)
 	chisel, err := chiselwrapper.New()
 	if err != nil {
@@ -520,7 +520,7 @@ func TestHandleVerifyReplayNonce(t *testing.T) {
 	var chalResp struct {
 		Nonce string `json:"nonce"`
 	}
-	json.Unmarshal(chalRec.Body.Bytes(), &chalResp)
+	_ = json.Unmarshal(chalRec.Body.Bytes(), &chalResp)
 
 	sig := ed25519.Sign(priv, []byte(chalResp.Nonce))
 	vReq := struct {

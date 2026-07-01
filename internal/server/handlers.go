@@ -158,5 +158,5 @@ func (f *Frontend) handleScript(w http.ResponseWriter, r *http.Request, localPor
 
 	w.Header().Set("Content-Type", "text/x-shellscript")
 	w.Header().Set("Content-Disposition", "attachment; filename=install.sh")
-	w.Write([]byte(scr))
+	_, _ = w.Write([]byte(scr))
 }

@@ -6,6 +6,7 @@ import (
 	"time"
 
 	bolt "go.etcd.io/bbolt"
+	bberr "go.etcd.io/bbolt/errors"
 )
 
 const (
@@ -28,13 +29,13 @@ type DB struct {
 func Open(path string) (*DB, error) {
 	db, err := bolt.Open(path, 0600, &bolt.Options{Timeout: 5 * time.Second})
 	if err != nil {
-		if errors.Is(err, bolt.ErrTimeout) {
+		if errors.Is(err, bberr.ErrTimeout) {
 			return nil, fmt.Errorf("database is locked by another process; is the server already running?")
 		}
 		return nil, fmt.Errorf("open db: %w", err)
 	}
 	if err := initBuckets(db); err != nil {
-		db.Close()
+		_ = db.Close()
 		return nil, fmt.Errorf("init buckets: %w", err)
 	}
 	return &DB{db}, nil
