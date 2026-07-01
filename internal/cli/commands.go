@@ -66,8 +66,18 @@ func adminClient(socketPath string) *http.Client {
 	}
 }
 
+func checkAdminSocket(socketPath string) error {
+	if _, err := os.Stat(socketPath); err != nil {
+		return fmt.Errorf("server is not running (admin socket not found at %s)", socketPath)
+	}
+	return nil
+}
+
 // SoftReload triggers a config reload via the admin socket.
 func SoftReload(ctx context.Context, nctx engine.NativeContext) error {
+	if err := checkAdminSocket(adminSocketPath()); err != nil {
+		return err
+	}
 	client := adminClient(adminSocketPath())
 	resp, err := client.Post("http://admin/reload", "", nil)
 	if err != nil {

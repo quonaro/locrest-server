@@ -32,6 +32,9 @@ func UserAdd(ctx context.Context, nctx engine.NativeContext) error {
 	}
 	req.Header.Set("Content-Type", "application/json")
 
+	if err := checkAdminSocket(adminSocketPath()); err != nil {
+		return err
+	}
 	client := adminClient(adminSocketPath())
 	resp, err := client.Do(req)
 	if err != nil {
@@ -100,6 +103,9 @@ func UserDelete(ctx context.Context, nctx engine.NativeContext) error {
 		return fmt.Errorf("build request: %w", err)
 	}
 
+	if err := checkAdminSocket(adminSocketPath()); err != nil {
+		return err
+	}
 	client := adminClient(adminSocketPath())
 	resp, err := client.Do(req)
 	if err != nil {
@@ -132,6 +138,9 @@ func UserRegenerate(ctx context.Context, nctx engine.NativeContext) error {
 		return fmt.Errorf("build request: %w", err)
 	}
 
+	if err := checkAdminSocket(adminSocketPath()); err != nil {
+		return err
+	}
 	client := adminClient(adminSocketPath())
 	resp, err := client.Do(req)
 	if err != nil {
@@ -174,6 +183,9 @@ func UserShow(ctx context.Context, nctx engine.NativeContext) error {
 		return fmt.Errorf("build request: %w", err)
 	}
 
+	if err := checkAdminSocket(adminSocketPath()); err != nil {
+		return err
+	}
 	client := adminClient(adminSocketPath())
 	resp, err := client.Do(req)
 	if err != nil {
@@ -211,6 +223,9 @@ func UserList(ctx context.Context, nctx engine.NativeContext) error {
 		return fmt.Errorf("build request: %w", err)
 	}
 
+	if err := checkAdminSocket(adminSocketPath()); err != nil {
+		return err
+	}
 	client := adminClient(adminSocketPath())
 	resp, err := client.Do(req)
 	if err != nil {

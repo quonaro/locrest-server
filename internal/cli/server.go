@@ -13,11 +13,13 @@ import (
 	"locrest-server/internal/chiselwrapper"
 	"locrest-server/internal/logger"
 	"locrest-server/internal/server"
+
+	"github.com/quonaro/lota/engine"
 )
 
 // StartServer loads config, opens DB, and runs the frontend.
 // It blocks until interrupted.
-func StartServer() error {
+func StartServer(ctx context.Context, nctx engine.NativeContext) error {
 	cfg, err := loadConfig(configPath())
 	if err != nil {
 		return err

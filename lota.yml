@@ -30,6 +30,7 @@ push:
     if [ -n $tag ]; then
       git tag -f $tag
       git push origin $tag --force
+      git push
     else
       git push origin main
     fi

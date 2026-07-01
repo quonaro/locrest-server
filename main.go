@@ -60,6 +60,7 @@ func parseGlobalFlags(args []string) (remaining []string, showVersion, showHelp 
 
 func buildApp() (*engine.App, error) {
 	builder := engine.NewBuilder("lrs", cliYAML)
+	builder.RegisterNative("run", cli.StartServer)
 	builder.RegisterNative("user.add", cli.UserAdd)
 	builder.RegisterNative("user.delete", cli.UserDelete)
 	builder.RegisterNative("user.regenerate", cli.UserRegenerate)
@@ -91,18 +92,15 @@ func main() {
 		return
 	}
 
-	if len(args) == 0 {
-		if err := cli.StartServer(); err != nil {
-			color.New(color.FgRed).Fprintln(os.Stderr, err)
-			os.Exit(1)
-		}
-		return
-	}
-
 	app, err := buildApp()
 	if err != nil {
 		color.New(color.FgRed).Fprintf(os.Stderr, "config: %v\n", err)
 		os.Exit(1)
+	}
+
+	if len(args) == 0 {
+		app.PrintGroupHelp(nil)
+		return
 	}
 
 	if err := app.Run(context.Background(), args); err != nil {

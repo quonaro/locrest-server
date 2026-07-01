@@ -1,9 +1,6 @@
 #!/bin/sh
 set -e
 
-OWNER="${OWNER:-quonaro}"
-REPO="${REPO:-locrest-server}"
-VERSION="${VERSION:-latest}"
 BIN_NAME="${BIN_NAME:-lrs}"
 USER_NAME="${USER_NAME:-locrest}"
 GROUP_NAME="${GROUP_NAME:-locrest}"
@@ -17,6 +14,7 @@ INIT_SYSTEM=""
 OS=""
 ARCH=""
 BIN_TMP=""
+
 if [ -t 1 ]; then
 	RED='\033[0;31m'
 	GREEN='\033[0;32m'
@@ -30,6 +28,7 @@ fi
 info() { printf "${GREEN}==>${NC} %s\n" "$*"; }
 warn() { printf "${YELLOW}WARN:${NC} %s\n" "$*" >&2; }
 error() { printf "${RED}ERROR:${NC} %s\n" "$*" >&2; exit 1; }
+
 detect_platform() {
 	OS=$(uname -s | tr '[:upper:]' '[:lower:]')
 	ARCH=$(uname -m)
@@ -116,88 +115,34 @@ remove_existing() {
 	fi
 }
 
-download() {
-	local url="$1" file="$2"
-	if command -v curl >/dev/null 2>&1; then curl -fsSL -o "$file" "$url"
-	elif command -v wget >/dev/null 2>&1; then wget -q -O "$file" "$url"
-	else error "curl or wget is required"
+build_locally() {
+	if ! command -v go >/dev/null 2>&1; then
+		error "go is required to build from source"
 	fi
-}
 
-try_download() {
-	local url="$1" file="$2" errfile="${3:-}"
-	if [ -n "$errfile" ]; then
-		if download "$url" "$file" 2>"$errfile"; then return 0; fi
-	else
-		if download "$url" "$file" 2>/dev/null; then return 0; fi
-	fi
-	rm -f "$file"
-	return 1
-}
+	local client_dir="internal/embedbin/bin"
+	local server_dir
+	server_dir=$(pwd)
 
-sha256_file() {
-	if command -v sha256sum >/dev/null 2>&1; then sha256sum "$1" | awk '{print $1}'
-	else shasum -a 256 "$1" | awk '{print $1}'
-	fi
-}
+	info "building client binaries..."
+	cd ../client || error "client directory not found at ../client"
 
-META_TAG=""
-META_COMMIT=""
+	mkdir -p "../server/${client_dir}"
+	GOOS=linux   GOARCH=amd64 go build -ldflags="-s -w" -o "../server/${client_dir}/lrc-linux-amd64" .
+	GOOS=linux   GOARCH=arm64 go build -ldflags="-s -w" -o "../server/${client_dir}/lrc-linux-arm64" .
+	GOOS=darwin  GOARCH=amd64 go build -ldflags="-s -w" -o "../server/${client_dir}/lrc-darwin-amd64" .
+	GOOS=darwin  GOARCH=arm64 go build -ldflags="-s -w" -o "../server/${client_dir}/lrc-darwin-arm64" .
 
-fetch_release_meta() {
-	local api_url="https://api.github.com/repos/$OWNER/$REPO/releases/latest"
-	local tmpfile
-	tmpfile=$(mktemp)
-	if command -v curl >/dev/null 2>&1; then
-		curl -fsSL -H "Accept: application/vnd.github.v3+json" "$api_url" > "$tmpfile" 2>/dev/null || true
-	elif command -v wget >/dev/null 2>&1; then
-		wget -qO- --header="Accept: application/vnd.github.v3+json" "$api_url" > "$tmpfile" 2>/dev/null || true
-	fi
-	if [ -s "$tmpfile" ]; then
-		META_TAG=$(sed -n 's/.*"tag_name": *"\([^"]*\)".*/\1/p' "$tmpfile" | head -n 1)
-		META_COMMIT=$(sed -n 's/.*"target_commitish": *"\([^"]*\)".*/\1/p' "$tmpfile" | head -n 1)
-	fi
-	rm -f "$tmpfile"
-}
+	cd "../server" || error "failed to return to server directory"
 
-download_binary() {
-	if [ "$VERSION" = "latest" ]; then
-		VERSION="${META_TAG:-latest}"
-		[ -z "$META_TAG" ] && error "could not determine latest release version"
-	fi
-	local base_url="https://github.com/$OWNER/$REPO/releases/download/$VERSION"
-	local tmp_dir asset candidate err
-	tmp_dir=$(mktemp -d)
-	asset="$BIN_NAME-$OS-$ARCH"
-	err="$tmp_dir/download.err"
-	info "downloading $asset"
-	if try_download "$base_url/$asset" "$tmp_dir/$asset" "$err"; then BIN_TMP="$tmp_dir/$asset"
-	elif try_download "$base_url/$asset.tar.gz" "$tmp_dir/$asset.tar.gz" "$err"; then
-		tar -xzf "$tmp_dir/$asset.tar.gz" -C "$tmp_dir"
-		candidate=$(find "$tmp_dir" -maxdepth 2 -type f -name "$BIN_NAME" | head -n 1)
-		[ -z "$candidate" ] && error "archive did not contain $BIN_NAME"
-		BIN_TMP="$candidate"
-	elif try_download "$base_url/${BIN_NAME}_${OS}_${ARCH}.tar.gz" "$tmp_dir/alt.tar.gz" "$err"; then
-		tar -xzf "$tmp_dir/alt.tar.gz" -C "$tmp_dir"
-		candidate=$(find "$tmp_dir" -maxdepth 2 -type f -name "$BIN_NAME" | head -n 1)
-		[ -z "$candidate" ] && error "archive did not contain $BIN_NAME"
-		BIN_TMP="$candidate"
-	else
-		printf '%s\n' "tried:" "$base_url/$asset" "$base_url/$asset.tar.gz" "$base_url/${BIN_NAME}_${OS}_${ARCH}.tar.gz" >&2
-		error "could not find release asset for $OS/$ARCH ($(cat "$err"))"
-	fi
-	if try_download "$base_url/$(basename "$BIN_TMP").sha256" "$tmp_dir/checksum"; then
-		local expected actual
-		expected=$(awk '{print $1}' "$tmp_dir/checksum")
-		actual=$(sha256_file "$BIN_TMP")
-		if [ "$actual" != "$expected" ]; then
-			warn "expected: $expected"
-			warn "actual:   $actual"
-			error "checksum mismatch"
-		fi
-		info "checksum verified"
-	else warn "no checksum file found; skipping verification"
-	fi
+	info "building server..."
+	local VERSION COMMIT
+	VERSION=$(git describe --tags --always --dirty 2>/dev/null || echo dev)
+	COMMIT=$(git rev-parse --short HEAD 2>/dev/null || echo unknown)
+
+	go build -ldflags="-s -w -X main.version=${VERSION} -X main.commit=${COMMIT}" -o lrs .
+	cp lrs "${client_dir}/lrs"
+	BIN_TMP="${server_dir}/lrs"
 }
 
 create_user() {
@@ -388,7 +333,7 @@ banner() {
 	local ver="$1" commit="$2" plat="$3" init="$4"
 	printf "${BLUE}"
 	printf '+-----------------------------------+\n'
-	printf '|  Locrest Server Installer         |\n'
+	printf '|  Locrest Server Installer (dev)   |\n'
 	printf '+-----------------------------------+\n'
 	printf "${NC}\n"
 	printf "  %s (%s)  %s  %s\n\n" "$ver" "$commit" "$plat" "$init"
@@ -397,11 +342,12 @@ banner() {
 main() {
 	detect_platform
 	detect_init
-	if [ "$VERSION" = "latest" ]; then
-		fetch_release_meta
-		VERSION="${META_TAG:-latest}"
-	fi
-	banner "$VERSION" "${META_COMMIT:-unknown}" "$OS/$ARCH" "$INIT_SYSTEM"
+
+	local VERSION COMMIT
+	VERSION=$(git describe --tags --always --dirty 2>/dev/null || echo dev)
+	COMMIT=$(git rev-parse --short HEAD 2>/dev/null || echo unknown)
+
+	banner "$VERSION" "$COMMIT" "$OS/$ARCH" "$INIT_SYSTEM"
 	require_root
 	if is_installed; then
 		if prompt_reinstall; then
@@ -412,7 +358,7 @@ main() {
 			exit 0
 		fi
 	fi
-	download_binary
+	build_locally
 	create_user
 	install_files
 	setup_config
