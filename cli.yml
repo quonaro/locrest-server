@@ -22,7 +22,7 @@ user:
     native: true
     args:
     - "username:str"
-  show:
+  info:
     desc: Show a user by username
     native: true
     args:
