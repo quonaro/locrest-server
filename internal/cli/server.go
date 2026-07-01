@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"syscall"
 	"time"
 
@@ -34,7 +35,7 @@ func StartServer(ctx context.Context, nctx engine.NativeContext) error {
 	defer func() { _ = database.Close() }()
 
 	store := auth.NewStore(database)
-	chisel, err := chiselwrapper.New()
+	chisel, err := chiselwrapper.New(filepath.Join(filepath.Dir(cfg.Runtime.DBPath), "chisel_host_key"))
 	if err != nil {
 		return fmt.Errorf("chisel init: %w", err)
 	}

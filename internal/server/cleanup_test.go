@@ -24,7 +24,7 @@ func TestCleanupKeepsActiveSessionOnDisconnect(t *testing.T) {
 	defer func() { _ = database.Close() }()
 
 	store := auth.NewStore(database)
-	chisel, err := chiselwrapper.New()
+	chisel, err := chiselwrapper.New("")
 	if err != nil {
 		t.Fatalf("new chisel: %v", err)
 	}

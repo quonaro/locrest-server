@@ -41,7 +41,7 @@ func newTestFrontend(t *testing.T, cfg *config.ServerConfig) *Frontend {
 	}
 	t.Cleanup(func() { _ = database.Close() })
 	store := auth.NewStore(database)
-	chisel, err := chiselwrapper.New()
+	chisel, err := chiselwrapper.New("")
 	if err != nil {
 		t.Fatalf("new chisel: %v", err)
 	}
