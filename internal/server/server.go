@@ -16,7 +16,6 @@ import (
 
 	"locrest-server/internal/auth"
 	"locrest-server/internal/binary"
-	tunnel "locrest-server/internal/chiselvendor/tunnel"
 	"locrest-server/internal/chiselwrapper"
 	"locrest-server/internal/config"
 	"locrest-server/internal/db"
@@ -294,39 +293,6 @@ func (f *Frontend) ReloadChiselUsers() {
 		switch sess.Mode {
 		case "http":
 			f.RegisterRoute(sess.Subdomain, sess.ServerPort)
-		case "tcp", "tcp/udp":
-			go func(port int, mode string) {
-				defer func() {
-					if r := recover(); r != nil {
-						slog.Error("panic in reload raw listener", "port", port, "mode", mode, "recover", r)
-					}
-				}()
-				for i := 0; i < 50; i++ {
-					if tunnel.GetProxyPipe(port, "tcp") != nil {
-						go f.startTCPListener(port)
-						if mode == "tcp/udp" {
-							go func(udpPort int) {
-								defer func() {
-									if r := recover(); r != nil {
-										slog.Error("panic in reload udp listener", "port", udpPort, "recover", r)
-									}
-								}()
-								for j := 0; j < 50; j++ {
-									if tunnel.GetProxyPipe(udpPort, "udp") != nil {
-										f.startUDPListener(udpPort)
-										return
-									}
-									time.Sleep(100 * time.Millisecond)
-								}
-								slog.Warn("reload udp raw: chisel pipe never created", "port", udpPort)
-							}(port)
-						}
-						return
-					}
-					time.Sleep(100 * time.Millisecond)
-				}
-				slog.Warn("reload raw: chisel pipe never created", "port", port)
-			}(sess.ServerPort, sess.Mode)
 		}
 		slog.Debug("reloaded chisel user", "subdomain", sess.Subdomain, "mode", sess.Mode)
 	}

@@ -69,23 +69,15 @@ func (f *Frontend) startUDPListener(port int) {
 			if err := dec.Decode(&p); err != nil {
 				if err != io.EOF {
 					slog.Info("udp raw decode error", "port", port, "error", err)
-				} else {
-					slog.Info("udp raw decode EOF", "port", port)
 				}
 				return
 			}
-			slog.Info("udp raw decoded packet from tunnel", "port", port, "src", p.Src, "len", len(p.Payload))
 			dst, err := net.ResolveUDPAddr("udp", p.Src)
 			if err != nil {
 				slog.Info("udp raw resolve dst failed", "port", port, "src", p.Src, "error", err)
 				continue
 			}
-			n, err := conn.WriteToUDP(p.Payload, dst)
-			if err != nil {
-				slog.Info("udp raw write response failed", "port", port, "dst", dst, "error", err)
-			} else {
-				slog.Info("udp raw wrote response", "port", port, "dst", dst, "n", n)
-			}
+			_, _ = conn.WriteToUDP(p.Payload, dst)
 		}
 	}()
 
@@ -103,13 +95,13 @@ func (f *Frontend) startUDPListener(port int) {
 				slog.Info("udp raw read error", "port", port, "error", err)
 				return
 			}
-			slog.Info("udp raw received packet", "port", port, "src", src, "n", n)
+			slog.Debug("udp raw received packet", "port", port, "src", src, "n", n)
 			p := tunnel.UDPPacket{Src: src.String(), Payload: buff[:n]}
 			if err := enc.Encode(p); err != nil {
 				slog.Info("udp raw encode error", "port", port, "error", err)
 				return
 			}
-			slog.Info("udp raw encoded packet", "port", port, "src", p.Src, "len", len(p.Payload))
+			slog.Debug("udp raw encoded packet", "port", port, "src", p.Src, "len", len(p.Payload))
 		}
 	}()
 
