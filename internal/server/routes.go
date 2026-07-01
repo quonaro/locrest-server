@@ -40,7 +40,7 @@ func (f *Frontend) UnregisterRoute(subdomain string) {
 	slog.Debug("route unregistered", "subdomain", subdomain)
 }
 
-// isPortInUse reports whether any active route or TCP listener already uses the given port.
+// isPortInUse reports whether any active route or listener already uses the given port.
 func (f *Frontend) isPortInUse(port int) bool {
 	f.mu.RLock()
 	defer f.mu.RUnlock()
@@ -50,6 +50,10 @@ func (f *Frontend) isPortInUse(port int) bool {
 		}
 	}
 	_, ok := f.tcpListeners[port]
+	if ok {
+		return true
+	}
+	_, ok = f.udpListeners[port]
 	return ok
 }
 

@@ -168,7 +168,7 @@ then
 fi
 SUP_PID=$!
 sleep 2
-if ! kill -0 "$SUP_PID" 2>/dev/null; then
+if ! "$BIN" list >/dev/null 2>&1; then
   echo "Supervisor failed to start" >&2
   exit 1
 fi

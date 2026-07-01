@@ -47,7 +47,12 @@ func (f *Frontend) cleanStaleRoutesAndSessions() {
 			continue
 		}
 		if sess.Mode == "tcp" || sess.Mode == "tcp/udp" {
-			if tunnel.GetProxyPipe(sess.ServerPort, "tcp") == nil {
+			tcpGone := tunnel.GetProxyPipe(sess.ServerPort, "tcp") == nil
+			udpGone := true
+			if sess.Mode == "tcp/udp" {
+				udpGone = tunnel.GetProxyPipe(sess.ServerPort, "udp") == nil
+			}
+			if tcpGone && udpGone {
 				disconnectedSessions = append(disconnectedSessions, sess.SetupToken)
 				continue
 			}
