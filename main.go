@@ -11,6 +11,7 @@ import (
 
 	"locrest-server/internal/cli"
 
+	"github.com/fatih/color"
 	"github.com/quonaro/lota/engine"
 )
 
@@ -43,15 +44,29 @@ var (
 	commit  = "unknown"
 )
 
-func parseVersionFlag(args []string) ([]string, bool) {
-	var remaining []string
+func parseGlobalFlags(args []string) (remaining []string, showVersion, showHelp bool) {
 	for _, a := range args {
-		if a == "-v" || a == "--version" {
-			return remaining, true
+		switch a {
+		case "-v", "--version":
+			showVersion = true
+		case "-h", "--help":
+			showHelp = true
+		default:
+			remaining = append(remaining, a)
 		}
-		remaining = append(remaining, a)
 	}
-	return remaining, false
+	return
+}
+
+func buildApp() (*engine.App, error) {
+	builder := engine.NewBuilder("lrs", cliYAML)
+	builder.RegisterNative("user.add", cli.UserAdd)
+	builder.RegisterNative("user.delete", cli.UserDelete)
+	builder.RegisterNative("user.regenerate", cli.UserRegenerate)
+	builder.RegisterNative("user.show", cli.UserShow)
+	builder.RegisterNative("user.list", cli.UserList)
+	builder.RegisterNative("soft-reload", cli.SoftReload)
+	return builder.Build()
 }
 
 func main() {
@@ -60,31 +75,33 @@ func main() {
 		os.Setenv("LOCREST_CONFIG", configPath)
 	}
 
-	args, showVersion := parseVersionFlag(args)
+	args, showVersion, showHelp := parseGlobalFlags(args)
 	if showVersion {
 		fmt.Printf("lrs %s (commit %s)\n", version, commit)
 		return
 	}
 
+	if showHelp {
+		app, err := buildApp()
+		if err != nil {
+			color.New(color.FgRed).Fprintf(os.Stderr, "config: %v\n", err)
+			os.Exit(1)
+		}
+		app.PrintGroupHelp(nil)
+		return
+	}
+
 	if len(args) == 0 {
 		if err := cli.StartServer(); err != nil {
-			fmt.Fprintf(os.Stderr, "server: %v\n", err)
+			color.New(color.FgRed).Fprintln(os.Stderr, err)
 			os.Exit(1)
 		}
 		return
 	}
 
-	builder := engine.NewBuilder("lrs", cliYAML)
-	builder.RegisterNative("user.add", cli.UserAdd)
-	builder.RegisterNative("user.delete", cli.UserDelete)
-	builder.RegisterNative("user.regenerate", cli.UserRegenerate)
-	builder.RegisterNative("user.show", cli.UserShow)
-	builder.RegisterNative("user.list", cli.UserList)
-	builder.RegisterNative("soft-reload", cli.SoftReload)
-
-	app, err := builder.Build()
+	app, err := buildApp()
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "config: %v\n", err)
+		color.New(color.FgRed).Fprintf(os.Stderr, "config: %v\n", err)
 		os.Exit(1)
 	}
 
@@ -94,7 +111,7 @@ func main() {
 			app.PrintGroupHelp(groupErr.Groups)
 			return
 		}
-		fmt.Fprintf(os.Stderr, "run: %v\n", err)
+		color.New(color.FgRed).Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
 }

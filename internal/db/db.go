@@ -1,6 +1,7 @@
 package db
 
 import (
+	"errors"
 	"fmt"
 	"time"
 
@@ -27,6 +28,9 @@ type DB struct {
 func Open(path string) (*DB, error) {
 	db, err := bolt.Open(path, 0600, &bolt.Options{Timeout: 5 * time.Second})
 	if err != nil {
+		if errors.Is(err, bolt.ErrTimeout) {
+			return nil, fmt.Errorf("database is locked by another process; is the server already running?")
+		}
 		return nil, fmt.Errorf("open db: %w", err)
 	}
 	if err := initBuckets(db); err != nil {
