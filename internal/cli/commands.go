@@ -2,6 +2,7 @@ package cli
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net"
 	"net/http"
@@ -14,7 +15,7 @@ import (
 	"github.com/quonaro/lota/engine"
 )
 
-const defaultConfigPath = "locrest.yaml"
+const defaultConfigPath = "/etc/locrest/locrest.yaml"
 
 func configPath() string {
 	if p := os.Getenv("LOCREST_CONFIG"); p != "" {
@@ -37,6 +38,9 @@ func loadConfig(path string) (*config.ServerConfig, error) {
 	}
 	loaded, err := config.Load(path)
 	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return nil, fmt.Errorf("config file not found: %s", path)
+		}
 		return nil, err
 	}
 	*cfg = *loaded

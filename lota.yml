@@ -20,3 +20,16 @@ run:
 
     echo "[3/3] Starting server..."
     ./lrs
+
+push:
+  desc: Push to GitHub
+  color: cyan
+  args:
+  - "tag:str?"
+  script: |
+    if [ -n $tag ]; then
+      git tag $tag
+      git push origin $tag --force
+    else
+      git push origin main
+    fi
