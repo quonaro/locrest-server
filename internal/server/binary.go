@@ -10,7 +10,7 @@ import (
 
 func (f *Frontend) startBinaryUpdater(ctx context.Context) {
 	cfg := f.cfg.Load()
-	if cfg.BinaryRefreshInterval <= 0 {
+	if cfg.Binary.RefreshInterval <= 0 {
 		return
 	}
 
@@ -19,7 +19,7 @@ func (f *Frontend) startBinaryUpdater(ctx context.Context) {
 		slog.Error("binary cache initial update failed", "error", err)
 	}
 
-	ticker := time.NewTicker(cfg.BinaryRefreshInterval)
+	ticker := time.NewTicker(cfg.Binary.RefreshInterval)
 	defer ticker.Stop()
 	for {
 		select {

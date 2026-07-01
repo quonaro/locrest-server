@@ -1,0 +1,127 @@
+# Locrest server configuration example.
+# All parameters shown with their default values.
+# Copy this file to locrest.yaml and edit as needed.
+
+server:
+  # ------------------------------------------------------------------
+  # Network
+  # ------------------------------------------------------------------
+  # Public domain used for tunnel subdomains (e.g. <sub>.localtest.me).
+  network:
+    domain: "localtest.me"
+    # HTTP port for insecure traffic (or primary when TLS is disabled).
+    http_port: 80
+    # HTTPS port when TLS is enabled.
+    https_port: 443
+    # Trust X-Forwarded-For / X-Real-Ip when behind a reverse proxy.
+    behind_proxy: false
+    # Redirect HTTP -> HTTPS when both listeners are active.
+    http_to_https_redirect: false
+    # Allow parallel HTTP listener even when TLS is enabled.
+    insecure: false
+
+  # ------------------------------------------------------------------
+  # TLS
+  # ------------------------------------------------------------------
+  # Leave cert/key empty and set auto_tls + domains to use Let's Encrypt.
+  tls:
+    cert: ""
+    key: ""
+    auto_tls: false
+    domains: []
+    email: ""
+
+  # ------------------------------------------------------------------
+  # Tunnel
+  # ------------------------------------------------------------------
+  tunnel:
+    # Default TTL for new tunnels.
+    ttl: 1h
+    # Hard upper bound for any TTL request.
+    ttl_limit: 168h
+    # Maximum concurrent sessions (0 = unlimited).
+    max_sessions: 10000
+    # Length of auto-generated subdomains.
+    subdomain_length: 16
+    # Subdomains that cannot be requested by clients.
+    reserved_subdomains: []
+    # Whitelist of target hosts clients may tunnel to.
+    # Empty list allows any host (except blocked_tunnel_hosts).
+    allowed_tunnel_hosts:
+      - "localhost"
+      - "127.0.0.1"
+    # Hosts that are always rejected.
+    blocked_tunnel_hosts: []
+    # Strip ?error=... from proxied request URLs.
+    strip_error_param: false
+
+  # ------------------------------------------------------------------
+  # Security
+  # ------------------------------------------------------------------
+  security:
+    # Global IP allow-list. Empty = allow all.
+    allowed_ips: []
+    # Global IP block-list. Checked after allowed_ips.
+    blocked_ips: []
+    # Sliding-window rate limit for script requests.
+    rate_limit:
+      requests: 10
+      window: 1m
+    # Sliding-window rate limit for token regeneration.
+    regenerate_rate_limit:
+      requests: 3
+      window: 1m
+
+  # ------------------------------------------------------------------
+  # Permissions
+  # ------------------------------------------------------------------
+  # Capabilities granted to public (unauthenticated) and auth users.
+  permissions:
+    public:
+      create_tunnel: true
+      raw_tcp: false
+      set_ttl: false
+      max_ttl: 30m
+      http_auth: true
+      set_subdomain: false
+      set_allowed_ips: false
+      set_host: false
+      set_tcp_port: false
+      set_mode: false
+      infinity: false
+    auth:
+      create_tunnel: true
+      raw_tcp: true
+      set_ttl: true
+      max_ttl: 168h
+      http_auth: true
+      set_subdomain: true
+      set_allowed_ips: true
+      set_host: true
+      set_tcp_port: true
+      set_mode: true
+      infinity: true
+
+  # ------------------------------------------------------------------
+  # Binaries
+  # ------------------------------------------------------------------
+  # Client binary download settings.
+  binaries:
+    url: "https://github.com/quonaro/locrest-client/releases/latest/download"
+    # Cache directory for downloaded client binaries.
+    # Empty = <dirname(db_path)>/bin
+    cache_dir: ""
+    # How often to check for updated client binaries (0 = disable auto-update).
+    refresh_interval: 24h
+
+  # ------------------------------------------------------------------
+  # Runtime
+  # ------------------------------------------------------------------
+  runtime:
+    db_path: "locrest.db"
+    admin_socket_path: "/var/lib/locrest/locrest-admin.sock"
+    log_level: info
+    root_page: true
+    status_endpoint: true
+    # Extra HTTP response headers added to every response.
+    custom_response_headers: {}

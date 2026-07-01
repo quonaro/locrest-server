@@ -28,7 +28,7 @@ func effectiveTTL(r *http.Request, cfg *config.ServerConfig, rolePublic bool) (t
 		return 0, true, nil
 	}
 
-	ttl := cfg.TTL
+	ttl := cfg.Tunnel.TTL
 	if !perms.SetTTL {
 		return perms.MaxTTL, false, nil
 	}
@@ -41,8 +41,8 @@ func effectiveTTL(r *http.Request, cfg *config.ServerConfig, rolePublic bool) (t
 		if reqTTL <= 0 {
 			return 0, false, fmt.Errorf("ttl must be positive")
 		}
-		if reqTTL > cfg.TTLLimit {
-			return 0, false, fmt.Errorf("requested ttl exceeds maximum %s", cfg.TTLLimit)
+		if reqTTL > cfg.Tunnel.TTLLimit {
+			return 0, false, fmt.Errorf("requested ttl exceeds maximum %s", cfg.Tunnel.TTLLimit)
 		}
 		if reqTTL > perms.MaxTTL {
 			return 0, false, fmt.Errorf("requested ttl exceeds maximum allowed for your role (%s)", perms.MaxTTL)

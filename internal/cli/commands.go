@@ -48,7 +48,7 @@ func loadConfig(path string) (*config.ServerConfig, error) {
 }
 
 func openDB(cfg *config.ServerConfig) (*db.DB, error) {
-	database, err := db.Open(cfg.DBPath)
+	database, err := db.Open(cfg.Runtime.DBPath)
 	if err != nil {
 		return nil, fmt.Errorf("open db: %w", err)
 	}

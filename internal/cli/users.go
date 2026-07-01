@@ -79,11 +79,11 @@ func UserAdd(ctx context.Context, nctx engine.NativeContext) error {
 	_, _ = magenta.Fprintln(nctx.Stdout, "Usage")
 	_, _ = cyan.Fprintf(nctx.Stdout, "  Create an authenticated tunnel")
 	_, _ = fmt.Fprintf(nctx.Stdout, " (replace 8080 with your local port):\n")
-	_, _ = dim.Fprintf(nctx.Stdout, "    curl -H \"Authorization: Bearer %s\" https://%s/8080?infinity=true | bash\n", result.APIToken, cfg.Domain)
+	_, _ = dim.Fprintf(nctx.Stdout, "    curl -H \"Authorization: Bearer %s\" https://%s/8080?infinity=true | bash\n", result.APIToken, cfg.Network.Domain)
 
 	_, _ = fmt.Fprintln(nctx.Stdout)
 	_, _ = cyan.Fprintln(nctx.Stdout, "  Regenerate a lost API token using the seed phrase:")
-	_, _ = dim.Fprintf(nctx.Stdout, "    curl -X POST -H \"Content-Type: application/json\" -d '{\"seed_phrase\":\"%s\"}' https://%s/regenerate\n", result.SeedPhrase, cfg.Domain)
+	_, _ = dim.Fprintf(nctx.Stdout, "    curl -X POST -H \"Content-Type: application/json\" -d '{\"seed_phrase\":\"%s\"}' https://%s/regenerate\n", result.SeedPhrase, cfg.Network.Domain)
 
 	_, _ = fmt.Fprintln(nctx.Stdout)
 	_, _ = dim.Fprintln(nctx.Stdout, "Note: the client binary does not use the API token directly.")

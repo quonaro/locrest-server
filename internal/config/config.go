@@ -49,37 +49,62 @@ type PermissionsConfig struct {
 	Auth   Permissions `yaml:"auth"`
 }
 
+// NetworkConfig holds network settings.
+type NetworkConfig struct {
+	Domain              string `yaml:"domain"`
+	HTTPPort            int    `yaml:"http_port"`
+	HTTPSPort           int    `yaml:"https_port"`
+	BehindProxy         bool   `yaml:"behind_proxy"`
+	HTTPToHTTPSRedirect bool   `yaml:"http_to_https_redirect"`
+	Insecure            bool   `yaml:"insecure"`
+}
+
+// TunnelConfig holds tunnel parameters.
+type TunnelConfig struct {
+	TTL                time.Duration `yaml:"ttl"`
+	TTLLimit           time.Duration `yaml:"ttl_limit"`
+	MaxSessions        int           `yaml:"max_sessions"`
+	SubdomainLength    int           `yaml:"subdomain_length"`
+	ReservedSubdomains []string      `yaml:"reserved_subdomains"`
+	AllowedTunnelHosts []string      `yaml:"allowed_tunnel_hosts"`
+	BlockedTunnelHosts []string      `yaml:"blocked_tunnel_hosts"`
+	StripErrorParam    bool          `yaml:"strip_error_param"`
+}
+
+// SecurityConfig holds security and rate limiting.
+type SecurityConfig struct {
+	AllowedIPs          []string  `yaml:"allowed_ips"`
+	BlockedIPs          []string  `yaml:"blocked_ips"`
+	RateLimit           RateLimit `yaml:"rate_limit"`
+	RegenerateRateLimit RateLimit `yaml:"regenerate_rate_limit"`
+}
+
+// BinaryConfig holds client binary settings.
+type BinaryConfig struct {
+	URL             string        `yaml:"url"`
+	CacheDir        string        `yaml:"cache_dir"`
+	RefreshInterval time.Duration `yaml:"refresh_interval"`
+}
+
+// RuntimeConfig holds server runtime settings.
+type RuntimeConfig struct {
+	DBPath          string            `yaml:"db_path"`
+	AdminSocketPath string            `yaml:"admin_socket_path"`
+	LogLevel        string            `yaml:"log_level"`
+	RootPage        bool              `yaml:"root_page"`
+	StatusEndpoint  bool              `yaml:"status_endpoint"`
+	CustomHeaders   map[string]string `yaml:"custom_response_headers"`
+}
+
 // ServerConfig is the runtime configuration.
 type ServerConfig struct {
-	HTTPPort              int               `yaml:"http_port"`
-	HTTPSPort             int               `yaml:"https_port"`
-	Domain                string            `yaml:"domain"`
-	TLS                   TLSConfig         `yaml:"tls"`
-	TTL                   time.Duration     `yaml:"ttl"`
-	TTLLimit              time.Duration     `yaml:"ttl_limit"`
-	Insecure              bool              `yaml:"insecure"`
-	BinaryURL             string            `yaml:"binary_url"`
-	StripErrorParam       bool              `yaml:"strip_error_param"`
-	BehindProxy           bool              `yaml:"behind_proxy"`
-	DBPath                string            `yaml:"db_path"`
-	RootPage              bool              `yaml:"root_page"`
-	MaxSessions           int               `yaml:"max_sessions"`
-	RateLimit             RateLimit         `yaml:"rate_limit"`
-	RegenerateRateLimit   RateLimit         `yaml:"regenerate_rate_limit"`
-	AllowedTunnelHosts    []string          `yaml:"allowed_tunnel_hosts"`
-	BlockedTunnelHosts    []string          `yaml:"blocked_tunnel_hosts"`
-	AllowedIPs            []string          `yaml:"allowed_ips"`
-	BlockedIPs            []string          `yaml:"blocked_ips"`
-	ReservedSubdomains    []string          `yaml:"reserved_subdomains"`
-	SubdomainLength       int               `yaml:"subdomain_length"`
-	HTTPToHTTPSRedirect   bool              `yaml:"http_to_https_redirect"`
-	LogLevel              string            `yaml:"log_level"`
-	StatusEndpoint        bool              `yaml:"status_endpoint_enabled"`
-	CustomHeaders         map[string]string `yaml:"custom_response_headers"`
-	Permissions           PermissionsConfig `yaml:"permissions"`
-	AdminSocketPath       string            `yaml:"admin_socket_path"`
-	BinaryRefreshInterval time.Duration     `yaml:"binary_refresh_interval"`
-	BinaryCacheDir        string            `yaml:"binary_cache_dir"`
+	Network     NetworkConfig     `yaml:"network"`
+	TLS         TLSConfig         `yaml:"tls"`
+	Tunnel      TunnelConfig      `yaml:"tunnel"`
+	Security    SecurityConfig    `yaml:"security"`
+	Permissions PermissionsConfig `yaml:"permissions"`
+	Binary      BinaryConfig      `yaml:"binaries"`
+	Runtime     RuntimeConfig     `yaml:"runtime"`
 }
 
 type yamlRoot struct {
@@ -89,22 +114,32 @@ type yamlRoot struct {
 // DefaultConfig returns sensible defaults.
 func DefaultConfig() *ServerConfig {
 	return &ServerConfig{
-		HTTPPort:              80,
-		HTTPSPort:             443,
-		Domain:                "localtest.me",
-		TTL:                   1 * time.Hour,
-		TTLLimit:              7 * 24 * time.Hour,
-		BinaryURL:             DefaultBinaryURL,
-		DBPath:                "locrest.db",
-		RootPage:              true,
-		MaxSessions:           10000,
-		RateLimit:             RateLimit{Requests: 10, Window: time.Minute},
-		RegenerateRateLimit:   RateLimit{Requests: 3, Window: time.Minute},
-		AllowedTunnelHosts:    []string{"localhost", "127.0.0.1"},
-		SubdomainLength:       16,
-		LogLevel:              "info",
-		StatusEndpoint:        true,
-		BinaryRefreshInterval: 24 * time.Hour,
+		Network: NetworkConfig{
+			Domain:    "localtest.me",
+			HTTPPort:  80,
+			HTTPSPort: 443,
+		},
+		Tunnel: TunnelConfig{
+			TTL:                1 * time.Hour,
+			TTLLimit:           7 * 24 * time.Hour,
+			MaxSessions:        10000,
+			AllowedTunnelHosts: []string{"localhost", "127.0.0.1"},
+			SubdomainLength:    16,
+		},
+		Security: SecurityConfig{
+			RateLimit:           RateLimit{Requests: 10, Window: time.Minute},
+			RegenerateRateLimit: RateLimit{Requests: 3, Window: time.Minute},
+		},
+		Runtime: RuntimeConfig{
+			DBPath:         "locrest.db",
+			RootPage:       true,
+			LogLevel:       "info",
+			StatusEndpoint: true,
+		},
+		Binary: BinaryConfig{
+			URL:             DefaultBinaryURL,
+			RefreshInterval: 24 * time.Hour,
+		},
 		Permissions: PermissionsConfig{
 			Public: Permissions{
 				CreateTunnel: true,
@@ -133,54 +168,54 @@ func DefaultConfig() *ServerConfig {
 }
 
 // EffectiveBinaryCacheDir returns the binary cache directory.
-// When BinaryCacheDir is empty, it defaults to a "bin" subdirectory next to DBPath.
+// When Binary.CacheDir is empty, it defaults to a "bin" subdirectory next to Runtime.DBPath.
 func (c *ServerConfig) EffectiveBinaryCacheDir() string {
-	if c.BinaryCacheDir != "" {
-		return c.BinaryCacheDir
+	if c.Binary.CacheDir != "" {
+		return c.Binary.CacheDir
 	}
-	return filepath.Join(filepath.Dir(c.DBPath), "bin")
+	return filepath.Join(filepath.Dir(c.Runtime.DBPath), "bin")
 }
 
 // Validate checks the configuration for logical errors.
 func (c *ServerConfig) Validate() error {
-	if c.HTTPPort <= 0 || c.HTTPPort > 65535 {
-		return fmt.Errorf("invalid http_port: %d", c.HTTPPort)
+	if c.Network.HTTPPort <= 0 || c.Network.HTTPPort > 65535 {
+		return fmt.Errorf("invalid network.http_port: %d", c.Network.HTTPPort)
 	}
-	if c.HTTPSPort <= 0 || c.HTTPSPort > 65535 {
-		return fmt.Errorf("invalid https_port: %d", c.HTTPSPort)
+	if c.Network.HTTPSPort <= 0 || c.Network.HTTPSPort > 65535 {
+		return fmt.Errorf("invalid network.https_port: %d", c.Network.HTTPSPort)
 	}
-	if c.Domain == "" {
-		return fmt.Errorf("domain is required")
+	if c.Network.Domain == "" {
+		return fmt.Errorf("network.domain is required")
 	}
-	if c.TTL <= 0 {
-		return fmt.Errorf("ttl must be positive")
+	if c.Tunnel.TTL <= 0 {
+		return fmt.Errorf("tunnel.ttl must be positive")
 	}
-	if c.TTLLimit < c.TTL {
-		return fmt.Errorf("ttl_limit must be >= ttl")
+	if c.Tunnel.TTLLimit < c.Tunnel.TTL {
+		return fmt.Errorf("tunnel.ttl_limit must be >= tunnel.ttl")
 	}
-	if c.SubdomainLength <= 0 {
-		return fmt.Errorf("subdomain_length must be positive")
+	if c.Tunnel.SubdomainLength <= 0 {
+		return fmt.Errorf("tunnel.subdomain_length must be positive")
 	}
-	if c.MaxSessions < 0 {
-		return fmt.Errorf("max_sessions must be >= 0")
+	if c.Tunnel.MaxSessions < 0 {
+		return fmt.Errorf("tunnel.max_sessions must be >= 0")
 	}
-	if c.DBPath == "" {
-		return fmt.Errorf("db_path is required")
+	if c.Runtime.DBPath == "" {
+		return fmt.Errorf("runtime.db_path is required")
 	}
-	if c.AdminSocketPath == "" {
-		return fmt.Errorf("admin_socket_path is required")
+	if c.Runtime.AdminSocketPath == "" {
+		return fmt.Errorf("runtime.admin_socket_path is required")
 	}
-	if c.RateLimit.Requests < 0 {
-		return fmt.Errorf("rate_limit.requests must be >= 0")
+	if c.Security.RateLimit.Requests < 0 {
+		return fmt.Errorf("security.rate_limit.requests must be >= 0")
 	}
-	if c.RateLimit.Window <= 0 {
-		return fmt.Errorf("rate_limit.window must be positive")
+	if c.Security.RateLimit.Window <= 0 {
+		return fmt.Errorf("security.rate_limit.window must be positive")
 	}
-	if c.RegenerateRateLimit.Requests < 0 {
-		return fmt.Errorf("regenerate_rate_limit.requests must be >= 0")
+	if c.Security.RegenerateRateLimit.Requests < 0 {
+		return fmt.Errorf("security.regenerate_rate_limit.requests must be >= 0")
 	}
-	if c.RegenerateRateLimit.Window <= 0 {
-		return fmt.Errorf("regenerate_rate_limit.window must be positive")
+	if c.Security.RegenerateRateLimit.Window <= 0 {
+		return fmt.Errorf("security.regenerate_rate_limit.window must be positive")
 	}
 	if c.Permissions.Public.MaxTTL < 0 {
 		return fmt.Errorf("permissions.public.max_ttl must be >= 0")
@@ -188,8 +223,8 @@ func (c *ServerConfig) Validate() error {
 	if c.Permissions.Auth.MaxTTL < 0 {
 		return fmt.Errorf("permissions.auth.max_ttl must be >= 0")
 	}
-	if c.BinaryRefreshInterval < 0 {
-		return fmt.Errorf("binary_refresh_interval must be >= 0")
+	if c.Binary.RefreshInterval < 0 {
+		return fmt.Errorf("binaries.refresh_interval must be >= 0")
 	}
 	return nil
 }

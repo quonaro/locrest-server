@@ -1,14 +1,21 @@
 server:
-  http_port: 80
-  https_port: 443
-  domain: "localtest.me"
-  ttl: 1h
-  ttl_limit: 168h
-  binary_url: "https://github.com/quonaro/locrest-client/releases/latest/download"
+  network:
+    domain: "localtest.me"
+    http_port: 80
+    https_port: 443
+
+  tunnel:
+    ttl: 1h
+    ttl_limit: 168h
+
+  binaries:
+    url: "https://github.com/quonaro/locrest-client/releases/latest/download"
+
   permissions:
     public:
       raw_tcp: true
       set_subdomain: true
       set_allowed_ips: false
+
   tls:
     email: "admin@loc.rest"

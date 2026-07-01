@@ -47,7 +47,7 @@ type Frontend struct {
 
 // NewFrontend creates the HTTP frontend.
 func NewFrontend(cfg *config.ServerConfig, store *auth.Store, chisel *chiselwrapper.Chisel, database *db.DB, configPath string, adminSocketPath string) *Frontend {
-	binCache := binary.NewCache(cfg.EffectiveBinaryCacheDir(), cfg.BinaryURL)
+	binCache := binary.NewCache(cfg.EffectiveBinaryCacheDir(), cfg.Binary.URL)
 	f := &Frontend{
 		configPath:            configPath,
 		adminSocketPath:       adminSocketPath,
@@ -55,8 +55,8 @@ func NewFrontend(cfg *config.ServerConfig, store *auth.Store, chisel *chiselwrap
 		chisel:                chisel,
 		db:                    database,
 		routes:                make(map[string]int),
-		rateLimiter:           newRateLimiter(cfg.RateLimit.Requests, cfg.RateLimit.Window),
-		regenerateRateLimiter: newRateLimiter(cfg.RegenerateRateLimit.Requests, cfg.RegenerateRateLimit.Window),
+		rateLimiter:           newRateLimiter(cfg.Security.RateLimit.Requests, cfg.Security.RateLimit.Window),
+		regenerateRateLimiter: newRateLimiter(cfg.Security.RegenerateRateLimit.Requests, cfg.Security.RegenerateRateLimit.Window),
 		tcpListeners:          make(map[int]net.Listener),
 		binCache:              binCache,
 	}
@@ -72,8 +72,8 @@ func (f *Frontend) effectiveBinaryURL() string {
 	if cfg == nil {
 		return config.DefaultBinaryURL
 	}
-	if cfg.BinaryURL != "" {
-		return cfg.BinaryURL
+	if cfg.Binary.URL != "" {
+		return cfg.Binary.URL
 	}
 	return config.DefaultBinaryURL
 }
@@ -81,7 +81,7 @@ func (f *Frontend) effectiveBinaryURL() string {
 // Run starts the HTTP/HTTPS frontend and blocks.
 func (f *Frontend) Run(ctx context.Context) error {
 	cfg := f.cfg.Load()
-	logger.ReloadLevel(cfg.LogLevel)
+	logger.ReloadLevel(cfg.Runtime.LogLevel)
 
 	mux := http.NewServeMux()
 	mux.Handle("/tunnel", f.chisel.Handler())
@@ -104,20 +104,20 @@ func (f *Frontend) Run(ctx context.Context) error {
 	var insecureSrv *http.Server
 	if tlsEnabled {
 		primary = &http.Server{
-			Addr:      fmt.Sprintf(":%d", cfg.HTTPSPort),
+			Addr:      fmt.Sprintf(":%d", cfg.Network.HTTPSPort),
 			Handler:   handler,
 			TLSConfig: tlsConfig,
 		}
-		if cfg.Insecure {
-			if cfg.HTTPToHTTPSRedirect {
-				insecureSrv = &http.Server{Addr: fmt.Sprintf(":%d", cfg.HTTPPort), Handler: redirectToHTTPS(cfg.HTTPSPort)}
+		if cfg.Network.Insecure {
+			if cfg.Network.HTTPToHTTPSRedirect {
+				insecureSrv = &http.Server{Addr: fmt.Sprintf(":%d", cfg.Network.HTTPPort), Handler: redirectToHTTPS(cfg.Network.HTTPSPort)}
 			} else {
-				insecureSrv = &http.Server{Addr: fmt.Sprintf(":%d", cfg.HTTPPort), Handler: handler}
+				insecureSrv = &http.Server{Addr: fmt.Sprintf(":%d", cfg.Network.HTTPPort), Handler: handler}
 			}
 		}
 	} else {
 		primary = &http.Server{
-			Addr:    fmt.Sprintf(":%d", cfg.HTTPPort),
+			Addr:    fmt.Sprintf(":%d", cfg.Network.HTTPPort),
 			Handler: handler,
 		}
 	}
@@ -194,9 +194,9 @@ func (f *Frontend) reloadConfig() error {
 		return fmt.Errorf("validate config: %w", err)
 	}
 	oldCfg := f.cfg.Swap(newCfg)
-	logger.ReloadLevel(newCfg.LogLevel)
-	f.rateLimiter.reconfigure(newCfg.RateLimit.Requests, newCfg.RateLimit.Window)
-	f.regenerateRateLimiter.reconfigure(newCfg.RegenerateRateLimit.Requests, newCfg.RegenerateRateLimit.Window)
+	logger.ReloadLevel(newCfg.Runtime.LogLevel)
+	f.rateLimiter.reconfigure(newCfg.Security.RateLimit.Requests, newCfg.Security.RateLimit.Window)
+	f.regenerateRateLimiter.reconfigure(newCfg.Security.RegenerateRateLimit.Requests, newCfg.Security.RegenerateRateLimit.Window)
 	slog.Info("config reloaded", "path", f.configPath)
 	_ = oldCfg
 	return nil
@@ -256,7 +256,7 @@ func (f *Frontend) handler(w http.ResponseWriter, r *http.Request) {
 		f.handleChallenge(w, r)
 		return
 	}
-	if path == "/status" && cfg.StatusEndpoint {
+	if path == "/status" && cfg.Runtime.StatusEndpoint {
 		f.handleStatus(w, r)
 		return
 	}

@@ -80,7 +80,7 @@ func (f *Frontend) securityHeaders(next http.Handler) http.Handler {
 			w.Header().Set("Strict-Transport-Security", "max-age=31536000; includeSubDomains")
 		}
 		if cfg := f.cfg.Load(); cfg != nil {
-			for k, v := range cfg.CustomHeaders {
+			for k, v := range cfg.Runtime.CustomHeaders {
 				w.Header().Set(k, v)
 			}
 		}
@@ -95,13 +95,13 @@ func (f *Frontend) ipFilterMiddleware(next http.Handler) http.Handler {
 			next.ServeHTTP(w, r)
 			return
 		}
-		ip := clientIP(r, cfg.BehindProxy)
-		if len(cfg.AllowedIPs) > 0 && !ipAllowed(ip, cfg.AllowedIPs) {
+		ip := clientIP(r, cfg.Network.BehindProxy)
+		if len(cfg.Security.AllowedIPs) > 0 && !ipAllowed(ip, cfg.Security.AllowedIPs) {
 			slog.Warn("request from IP not in allowed list", "ip", ip, "path", r.URL.Path)
 			http.Error(w, "Forbidden", http.StatusForbidden)
 			return
 		}
-		if len(cfg.BlockedIPs) > 0 && ipAllowed(ip, cfg.BlockedIPs) {
+		if len(cfg.Security.BlockedIPs) > 0 && ipAllowed(ip, cfg.Security.BlockedIPs) {
 			slog.Warn("request from blocked IP", "ip", ip, "path", r.URL.Path)
 			http.Error(w, "Forbidden", http.StatusForbidden)
 			return

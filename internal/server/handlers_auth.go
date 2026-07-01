@@ -75,7 +75,7 @@ func (f *Frontend) handleRegenerate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	cfg := f.cfg.Load()
-	ip := clientIP(r, cfg.BehindProxy)
+	ip := clientIP(r, cfg.Network.BehindProxy)
 	slog.Debug("regenerate request", "ip", ip)
 	if !f.regenerateRateLimiter.allow(ip) {
 		slog.Warn("regenerate rate limit exceeded", "ip", ip)
@@ -129,7 +129,7 @@ func (f *Frontend) handleChallenge(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	cfg := f.cfg.Load()
-	ip := clientIP(r, cfg.BehindProxy)
+	ip := clientIP(r, cfg.Network.BehindProxy)
 	pubHex := r.URL.Query().Get("pubkey")
 	if pubHex == "" {
 		http.Error(w, "Missing pubkey", http.StatusBadRequest)
@@ -229,7 +229,7 @@ func (f *Frontend) handleVerify(w http.ResponseWriter, r *http.Request) {
 	}
 
 	cfg := f.cfg.Load()
-	ip := clientIP(r, cfg.BehindProxy)
+	ip := clientIP(r, cfg.Network.BehindProxy)
 	var perms config.Permissions
 	if sess.Role == "public" {
 		perms = cfg.Permissions.Public

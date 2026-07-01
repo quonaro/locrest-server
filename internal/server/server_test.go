@@ -27,12 +27,12 @@ func newTestFrontend(t *testing.T, cfg *config.ServerConfig) *Frontend {
 	t.Helper()
 	if cfg == nil {
 		cfg = config.DefaultConfig()
-		cfg.Domain = "localtest.me"
-		cfg.HTTPPort = 8080
-		cfg.HTTPSPort = 8443
-		cfg.RootPage = true
-		cfg.StatusEndpoint = true
-		cfg.BinaryRefreshInterval = 0
+		cfg.Network.Domain = "localtest.me"
+		cfg.Network.HTTPPort = 8080
+		cfg.Network.HTTPSPort = 8443
+		cfg.Runtime.RootPage = true
+		cfg.Runtime.StatusEndpoint = true
+		cfg.Binary.RefreshInterval = 0
 	}
 	dir := t.TempDir()
 	database, err := db.Open(filepath.Join(dir, "test.db"))
@@ -105,7 +105,7 @@ func TestIsPortInUse(t *testing.T) {
 func TestIsReservedSubdomain(t *testing.T) {
 	f := newTestFrontend(t, nil)
 	tmp := *f.cfg.Load()
-	tmp.ReservedSubdomains = []string{"www", "api"}
+	tmp.Tunnel.ReservedSubdomains = []string{"www", "api"}
 	f.cfg.Store(&tmp)
 	if !f.isReservedSubdomain("www") {
 		t.Fatal("www should be reserved")
@@ -118,7 +118,7 @@ func TestIsReservedSubdomain(t *testing.T) {
 func TestIsAllowedTunnelHost(t *testing.T) {
 	f := newTestFrontend(t, nil)
 	tmp := *f.cfg.Load()
-	tmp.AllowedTunnelHosts = []string{"localhost", "127.0.0.1"}
+	tmp.Tunnel.AllowedTunnelHosts = []string{"localhost", "127.0.0.1"}
 	f.cfg.Store(&tmp)
 	if !f.isAllowedTunnelHost("localhost") {
 		t.Fatal("localhost should be allowed")
@@ -127,8 +127,8 @@ func TestIsAllowedTunnelHost(t *testing.T) {
 		t.Fatal("example.com should not be allowed")
 	}
 	tmp2 := *f.cfg.Load()
-	tmp2.AllowedTunnelHosts = nil
-	tmp2.BlockedTunnelHosts = []string{"bad.example.com"}
+	tmp2.Tunnel.AllowedTunnelHosts = nil
+	tmp2.Tunnel.BlockedTunnelHosts = []string{"bad.example.com"}
 	f.cfg.Store(&tmp2)
 	if f.isAllowedTunnelHost("bad.example.com") {
 		t.Fatal("blocked host should not be allowed")
@@ -140,7 +140,7 @@ func TestIsAllowedTunnelHost(t *testing.T) {
 
 func TestSecurityHeaders(t *testing.T) {
 	cfg := config.DefaultConfig()
-	cfg.CustomHeaders = map[string]string{"X-Custom": "yes"}
+	cfg.Runtime.CustomHeaders = map[string]string{"X-Custom": "yes"}
 	f := NewFrontend(cfg, nil, nil, nil, "", "")
 
 	next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -203,7 +203,7 @@ func TestIPFilterMiddleware(t *testing.T) {
 	req.RemoteAddr = "192.168.1.10:1234"
 
 	cfg1 := config.DefaultConfig()
-	cfg1.AllowedIPs = []string{"192.168.1.0/24"}
+	cfg1.Security.AllowedIPs = []string{"192.168.1.0/24"}
 	f1 := NewFrontend(cfg1, nil, nil, nil, "", "")
 	rec := httptest.NewRecorder()
 	f1.ipFilterMiddleware(next).ServeHTTP(rec, req)
@@ -212,7 +212,7 @@ func TestIPFilterMiddleware(t *testing.T) {
 	}
 
 	cfg2 := config.DefaultConfig()
-	cfg2.AllowedIPs = []string{"10.0.0.0/8"}
+	cfg2.Security.AllowedIPs = []string{"10.0.0.0/8"}
 	f2 := NewFrontend(cfg2, nil, nil, nil, "", "")
 	rec2 := httptest.NewRecorder()
 	f2.ipFilterMiddleware(next).ServeHTTP(rec2, req)
@@ -221,7 +221,7 @@ func TestIPFilterMiddleware(t *testing.T) {
 	}
 
 	cfg3 := config.DefaultConfig()
-	cfg3.BlockedIPs = []string{"192.168.1.0/24"}
+	cfg3.Security.BlockedIPs = []string{"192.168.1.0/24"}
 	f3 := NewFrontend(cfg3, nil, nil, nil, "", "")
 	rec3 := httptest.NewRecorder()
 	f3.ipFilterMiddleware(next).ServeHTTP(rec3, req)
@@ -265,8 +265,8 @@ func TestRateLimiter(t *testing.T) {
 
 func TestEffectiveTTL(t *testing.T) {
 	cfg := config.DefaultConfig()
-	cfg.TTL = time.Hour
-	cfg.TTLLimit = 24 * time.Hour
+	cfg.Tunnel.TTL = time.Hour
+	cfg.Tunnel.TTLLimit = 24 * time.Hour
 
 	req := httptest.NewRequest(http.MethodGet, "/?ttl=30m", nil)
 	ttl, _, err := effectiveTTL(req, cfg, false)
@@ -347,14 +347,14 @@ func TestHandleScript(t *testing.T) {
 
 func TestEffectiveBinaryURL(t *testing.T) {
 	configuredCfg := config.DefaultConfig()
-	configuredCfg.BinaryURL = "https://cdn.example.com/bin"
+	configuredCfg.Binary.URL = "https://cdn.example.com/bin"
 	fConfigured := newTestFrontend(t, configuredCfg)
 	if u := fConfigured.effectiveBinaryURL(); u != "https://cdn.example.com/bin" {
 		t.Fatalf("configured URL = %q, want https://cdn.example.com/bin", u)
 	}
 
 	emptyCfg := config.DefaultConfig()
-	emptyCfg.BinaryURL = ""
+	emptyCfg.Binary.URL = ""
 	fEmpty := newTestFrontend(t, emptyCfg)
 	if u := fEmpty.effectiveBinaryURL(); u != config.DefaultBinaryURL {
 		t.Fatalf("empty URL = %q, want %q", u, config.DefaultBinaryURL)
@@ -364,7 +364,7 @@ func TestEffectiveBinaryURL(t *testing.T) {
 func TestHandleScriptMaxSessions(t *testing.T) {
 	f := newTestFrontend(t, nil)
 	tmp := *f.cfg.Load()
-	tmp.MaxSessions = 1
+	tmp.Tunnel.MaxSessions = 1
 	f.cfg.Store(&tmp)
 	if _, err := f.store.Create(8080, 30001, "localhost", time.Hour, false, 8, "http", "public", "", "", nil, ""); err != nil {
 		t.Fatalf("create session: %v", err)
@@ -866,7 +866,7 @@ func TestHandlerStatusEndpoint(t *testing.T) {
 func TestHandlerStatusEndpointDisabled(t *testing.T) {
 	f := newTestFrontend(t, nil)
 	tmp := *f.cfg.Load()
-	tmp.StatusEndpoint = false
+	tmp.Runtime.StatusEndpoint = false
 	f.cfg.Store(&tmp)
 	req := httptest.NewRequest(http.MethodGet, "/status", nil)
 	req.Host = "sub.localtest.me"

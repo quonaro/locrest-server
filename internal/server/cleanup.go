@@ -47,7 +47,7 @@ func (f *Frontend) cleanStaleRoutesAndSessions() {
 		}
 	}
 	cfg := f.cfg.Load()
-	if cfg.TTL > 0 {
+	if cfg.Tunnel.TTL > 0 {
 		now := time.Now()
 		for _, sess := range f.store.All() {
 			if !sess.Infinity && now.After(sess.ExpiresAt) {
@@ -69,7 +69,7 @@ func (f *Frontend) cleanStaleRoutesAndSessions() {
 	for _, setupToken := range expiredSessions {
 		sess, ok := f.store.Get(setupToken)
 		if ok {
-			slog.Info("cleaner: deleting expired session", "subdomain", sess.Subdomain, "setup_token_prefix", sess.SetupToken[:8], "ttl", cfg.TTL)
+			slog.Info("cleaner: deleting expired session", "subdomain", sess.Subdomain, "setup_token_prefix", sess.SetupToken[:8], "ttl", cfg.Tunnel.TTL)
 			if sess.Mode == "tcp" {
 				f.closeTCPListener(sess.ServerPort)
 				f.chisel.DeleteUser(sess.Subdomain)

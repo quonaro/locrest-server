@@ -9,34 +9,34 @@ import (
 
 func TestDefaultConfig(t *testing.T) {
 	cfg := DefaultConfig()
-	if cfg.HTTPPort != 80 {
-		t.Fatalf("HTTPPort = %d, want 80", cfg.HTTPPort)
+	if cfg.Network.HTTPPort != 80 {
+		t.Fatalf("HTTPPort = %d, want 80", cfg.Network.HTTPPort)
 	}
-	if cfg.HTTPSPort != 443 {
-		t.Fatalf("HTTPSPort = %d, want 443", cfg.HTTPSPort)
+	if cfg.Network.HTTPSPort != 443 {
+		t.Fatalf("HTTPSPort = %d, want 443", cfg.Network.HTTPSPort)
 	}
-	if cfg.Domain != "localtest.me" {
-		t.Fatalf("Domain = %q, want localtest.me", cfg.Domain)
+	if cfg.Network.Domain != "localtest.me" {
+		t.Fatalf("Domain = %q, want localtest.me", cfg.Network.Domain)
 	}
-	if cfg.TTL != time.Hour {
-		t.Fatalf("TTL = %v, want 1h", cfg.TTL)
+	if cfg.Tunnel.TTL != time.Hour {
+		t.Fatalf("TTL = %v, want 1h", cfg.Tunnel.TTL)
 	}
-	if cfg.TTLLimit != 7*24*time.Hour {
-		t.Fatalf("TTLLimit = %v, want 7d", cfg.TTLLimit)
+	if cfg.Tunnel.TTLLimit != 7*24*time.Hour {
+		t.Fatalf("TTLLimit = %v, want 7d", cfg.Tunnel.TTLLimit)
 	}
-	if cfg.DBPath != "locrest.db" {
-		t.Fatalf("DBPath = %q, want locrest.db", cfg.DBPath)
+	if cfg.Runtime.DBPath != "locrest.db" {
+		t.Fatalf("DBPath = %q, want locrest.db", cfg.Runtime.DBPath)
 	}
-	if cfg.MaxSessions != 10000 {
-		t.Fatalf("MaxSessions = %d, want 10000", cfg.MaxSessions)
+	if cfg.Tunnel.MaxSessions != 10000 {
+		t.Fatalf("MaxSessions = %d, want 10000", cfg.Tunnel.MaxSessions)
 	}
-	if cfg.SubdomainLength != 16 {
-		t.Fatalf("SubdomainLength = %d, want 16", cfg.SubdomainLength)
+	if cfg.Tunnel.SubdomainLength != 16 {
+		t.Fatalf("SubdomainLength = %d, want 16", cfg.Tunnel.SubdomainLength)
 	}
-	if cfg.LogLevel != "info" {
-		t.Fatalf("LogLevel = %q, want info", cfg.LogLevel)
+	if cfg.Runtime.LogLevel != "info" {
+		t.Fatalf("LogLevel = %q, want info", cfg.Runtime.LogLevel)
 	}
-	if !cfg.StatusEndpoint {
+	if !cfg.Runtime.StatusEndpoint {
 		t.Fatal("StatusEndpoint should be true")
 	}
 	if !cfg.Permissions.Public.CreateTunnel {
@@ -58,9 +58,11 @@ func TestLoadFromYAML(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "locrest.yaml")
 	content := `server:
-  http_port: 8080
-  domain: "example.com"
-  ttl: 30m
+  network:
+    http_port: 8080
+    domain: "example.com"
+  tunnel:
+    ttl: 30m
   permissions:
     public:
       raw_tcp: true
@@ -73,14 +75,14 @@ func TestLoadFromYAML(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Load: %v", err)
 	}
-	if cfg.HTTPPort != 8080 {
-		t.Fatalf("HTTPPort = %d, want 8080", cfg.HTTPPort)
+	if cfg.Network.HTTPPort != 8080 {
+		t.Fatalf("HTTPPort = %d, want 8080", cfg.Network.HTTPPort)
 	}
-	if cfg.Domain != "example.com" {
-		t.Fatalf("Domain = %q, want example.com", cfg.Domain)
+	if cfg.Network.Domain != "example.com" {
+		t.Fatalf("Domain = %q, want example.com", cfg.Network.Domain)
 	}
-	if cfg.TTL != 30*time.Minute {
-		t.Fatalf("TTL = %v, want 30m", cfg.TTL)
+	if cfg.Tunnel.TTL != 30*time.Minute {
+		t.Fatalf("TTL = %v, want 30m", cfg.Tunnel.TTL)
 	}
 	if !cfg.Permissions.Public.RawTCP {
 		t.Fatal("public RawTCP should be true")
@@ -100,11 +102,11 @@ func TestLoadMissingFile(t *testing.T) {
 
 func TestEffectiveBinaryCacheDir(t *testing.T) {
 	cfg := DefaultConfig()
-	want := filepath.Join(filepath.Dir(cfg.DBPath), "bin")
+	want := filepath.Join(filepath.Dir(cfg.Runtime.DBPath), "bin")
 	if got := cfg.EffectiveBinaryCacheDir(); got != want {
 		t.Fatalf("EffectiveBinaryCacheDir = %q, want %q", got, want)
 	}
-	cfg.BinaryCacheDir = "/custom/bin"
+	cfg.Binary.CacheDir = "/custom/bin"
 	if got := cfg.EffectiveBinaryCacheDir(); got != "/custom/bin" {
 		t.Fatalf("EffectiveBinaryCacheDir = %q, want /custom/bin", got)
 	}
@@ -112,8 +114,8 @@ func TestEffectiveBinaryCacheDir(t *testing.T) {
 
 func TestBinaryRefreshIntervalDefault(t *testing.T) {
 	cfg := DefaultConfig()
-	if cfg.BinaryRefreshInterval != 24*time.Hour {
-		t.Fatalf("BinaryRefreshInterval = %v, want 24h", cfg.BinaryRefreshInterval)
+	if cfg.Binary.RefreshInterval != 24*time.Hour {
+		t.Fatalf("BinaryRefreshInterval = %v, want 24h", cfg.Binary.RefreshInterval)
 	}
 }
 
@@ -125,8 +127,9 @@ func TestLoadIgnoresCLIArgs(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "locrest.yaml")
 	content := `server:
-  http_port: 8080
-  domain: "yaml.example.com"
+  network:
+    http_port: 8080
+    domain: "yaml.example.com"
 `
 	if err := os.WriteFile(path, []byte(content), 0600); err != nil {
 		t.Fatalf("write yaml: %v", err)
@@ -136,13 +139,13 @@ func TestLoadIgnoresCLIArgs(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Load: %v", err)
 	}
-	if cfg.HTTPPort != 8080 {
-		t.Fatalf("HTTPPort = %d, want 8080", cfg.HTTPPort)
+	if cfg.Network.HTTPPort != 8080 {
+		t.Fatalf("HTTPPort = %d, want 8080", cfg.Network.HTTPPort)
 	}
-	if cfg.Domain != "yaml.example.com" {
-		t.Fatalf("Domain = %q, want yaml.example.com", cfg.Domain)
+	if cfg.Network.Domain != "yaml.example.com" {
+		t.Fatalf("Domain = %q, want yaml.example.com", cfg.Network.Domain)
 	}
-	if cfg.LogLevel != "info" {
-		t.Fatalf("LogLevel = %q, want info", cfg.LogLevel)
+	if cfg.Runtime.LogLevel != "info" {
+		t.Fatalf("LogLevel = %q, want info", cfg.Runtime.LogLevel)
 	}
 }

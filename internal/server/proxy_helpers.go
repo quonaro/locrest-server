@@ -36,7 +36,7 @@ func (f *Frontend) sendHTMLError(w http.ResponseWriter, r *http.Request, code in
 	w.WriteHeader(code)
 	var domain string
 	if cfg := f.cfg.Load(); cfg != nil {
-		domain = cfg.Domain
+		domain = cfg.Network.Domain
 	}
 	_ = errorPageTmpl.Execute(w, map[string]any{
 		"Code":    code,
@@ -78,7 +78,7 @@ func (f *Frontend) checkAllowedIPs(w http.ResponseWriter, r *http.Request, subdo
 		return true
 	}
 	cfg := f.cfg.Load()
-	if !ipAllowed(clientIP(r, cfg.BehindProxy), sess.AllowedIPs) {
+	if !ipAllowed(clientIP(r, cfg.Network.BehindProxy), sess.AllowedIPs) {
 		f.sendHTMLError(w, r, http.StatusForbidden, "Forbidden", "Access from this IP is not allowed.")
 		return false
 	}
@@ -119,7 +119,7 @@ func (f *Frontend) isRootHost(host string) bool {
 		host = host[:colonIdx]
 	}
 	cfg := f.cfg.Load()
-	return host == cfg.Domain
+	return host == cfg.Network.Domain
 }
 
 func (f *Frontend) handleRoot(w http.ResponseWriter, _ *http.Request) {
@@ -127,7 +127,7 @@ func (f *Frontend) handleRoot(w http.ResponseWriter, _ *http.Request) {
 	w.WriteHeader(http.StatusOK)
 	var domain string
 	if cfg := f.cfg.Load(); cfg != nil {
-		domain = cfg.Domain
+		domain = cfg.Network.Domain
 	}
 	_ = rootPageTmpl.Execute(w, map[string]any{
 		"Domain": domain,

@@ -25,7 +25,7 @@ func StartServer(ctx context.Context, nctx engine.NativeContext) error {
 		return err
 	}
 
-	logger.Setup(cfg.LogLevel)
+	logger.Setup(cfg.Runtime.LogLevel)
 
 	database, err := openDB(cfg)
 	if err != nil {
@@ -55,7 +55,7 @@ func StartServer(ctx context.Context, nctx engine.NativeContext) error {
 		stop()
 	}()
 
-	slog.Info("locrest-server starting", "http_port", cfg.HTTPPort, "https_port", cfg.HTTPSPort)
+	slog.Info("locrest-server starting", "http_port", cfg.Network.HTTPPort, "https_port", cfg.Network.HTTPSPort)
 	if err := frontend.Run(ctx); err != nil {
 		return fmt.Errorf("frontend run: %w", err)
 	}

@@ -53,15 +53,15 @@ func (f *Frontend) handleScript(w http.ResponseWriter, r *http.Request, localPor
 		role = "public"
 	}
 	cfg := f.cfg.Load()
-	ip := clientIP(r, cfg.BehindProxy)
+	ip := clientIP(r, cfg.Network.BehindProxy)
 	slog.Debug("script request", "ip", ip, "local_port", localPort, "mode", mode, "role", role)
 	if !f.rateLimiter.allow(ip) {
 		slog.Warn("rate limit exceeded", "ip", ip)
 		sendScriptError(w, "Rate limit exceeded", http.StatusTooManyRequests)
 		return
 	}
-	if cfg.MaxSessions > 0 && f.store.Len() >= cfg.MaxSessions {
-		slog.Warn("max sessions reached", "count", f.store.Len(), "limit", cfg.MaxSessions)
+	if cfg.Tunnel.MaxSessions > 0 && f.store.Len() >= cfg.Tunnel.MaxSessions {
+		slog.Warn("max sessions reached", "count", f.store.Len(), "limit", cfg.Tunnel.MaxSessions)
 		sendScriptError(w, "Server busy", http.StatusServiceUnavailable)
 		return
 	}
@@ -147,7 +147,7 @@ func (f *Frontend) handleScript(w http.ResponseWriter, r *http.Request, localPor
 	if u := bearerUser(r, f.db); u != nil {
 		username = u.Username
 	}
-	sess, err := f.store.Create(localPort, serverPort, targetHost, ttl, infinity, cfg.SubdomainLength, mode, role, httpAuth, requestedSubdomain, allowedIPs, username)
+	sess, err := f.store.Create(localPort, serverPort, targetHost, ttl, infinity, cfg.Tunnel.SubdomainLength, mode, role, httpAuth, requestedSubdomain, allowedIPs, username)
 	if err != nil {
 		msg := err.Error()
 		status := http.StatusInternalServerError
@@ -166,13 +166,13 @@ func (f *Frontend) handleScript(w http.ResponseWriter, r *http.Request, localPor
 		hostOnly = hostOnly[:colonIdx]
 	}
 	serverURL := fmt.Sprintf("https://%s", hostOnly)
-	if cfg.HTTPSPort != 443 {
-		serverURL = fmt.Sprintf("https://%s:%d", hostOnly, cfg.HTTPSPort)
+	if cfg.Network.HTTPSPort != 443 {
+		serverURL = fmt.Sprintf("https://%s:%d", hostOnly, cfg.Network.HTTPSPort)
 	}
 	if cfg.TLS.Cert == "" && !cfg.TLS.AutoTLS {
 		serverURL = fmt.Sprintf("http://%s", hostOnly)
-		if cfg.HTTPPort != 80 {
-			serverURL = fmt.Sprintf("http://%s:%d", hostOnly, cfg.HTTPPort)
+		if cfg.Network.HTTPPort != 80 {
+			serverURL = fmt.Sprintf("http://%s:%d", hostOnly, cfg.Network.HTTPPort)
 		}
 	}
 
