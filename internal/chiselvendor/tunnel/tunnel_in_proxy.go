@@ -228,8 +228,12 @@ func (p *Proxy) pipeRemote(ctx context.Context, src io.ReadWriteCloser) {
 		l.Debugf("No remote connection")
 		return
 	}
+	remoteAddr := p.remote.Remote()
+	if p.remote.LocalProto == "udp" {
+		remoteAddr += "/udp"
+	}
 	//ssh request for tcp connection for this proxy's remote
-	dst, reqs, err := sshConn.OpenChannel("chisel", []byte(p.remote.Remote()))
+	dst, reqs, err := sshConn.OpenChannel("chisel", []byte(remoteAddr))
 	if err != nil {
 		l.Infof("Stream error: %s", err)
 		return
