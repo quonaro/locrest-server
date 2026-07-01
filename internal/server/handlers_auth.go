@@ -279,7 +279,7 @@ func (f *Frontend) handleVerify(w http.ResponseWriter, r *http.Request) {
 			}()
 			for i := 0; i < 50; i++ {
 				if tunnel.GetProxyPipe(port, "tcp") != nil {
-					f.startTCPListener(port)
+					go f.startTCPListener(port)
 					if mode == "tcp/udp" {
 						go func(udpPort int) {
 							defer func() {
