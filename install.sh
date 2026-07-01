@@ -158,6 +158,24 @@ fetch_release_meta() {
 		META_COMMIT=$(sed -n 's/.*"target_commitish": *"\([^"]*\)".*/\1/p' "$tmpfile" | head -n 1)
 	fi
 	rm -f "$tmpfile"
+
+	if [ -n "$META_COMMIT" ]; then
+		local commit_url="https://api.github.com/repos/$OWNER/$REPO/commits/$META_COMMIT"
+		tmpfile=$(mktemp)
+		if command -v curl >/dev/null 2>&1; then
+			curl -fsSL -H "Accept: application/vnd.github.v3+json" "$commit_url" > "$tmpfile" 2>/dev/null || true
+		elif command -v wget >/dev/null 2>&1; then
+			wget -qO- --header="Accept: application/vnd.github.v3+json" "$commit_url" > "$tmpfile" 2>/dev/null || true
+		fi
+		if [ -s "$tmpfile" ]; then
+			local sha
+			sha=$(grep -o '"sha"[ ]*:[ ]*"[^"]*"' "$tmpfile" | head -n 1 | sed 's/.*"//;s/"$//')
+			if [ -n "$sha" ]; then
+				META_COMMIT=$(printf '%.7s' "$sha")
+			fi
+		fi
+		rm -f "$tmpfile"
+	fi
 }
 
 download_binary() {
