@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"locrest-server/internal/config"
 	"log/slog"
+	"time"
 
 	"github.com/caddyserver/certmagic"
 	"github.com/libdns/cloudflare"
@@ -70,7 +71,9 @@ func (f *Frontend) buildCertMagicTLSConfig() (*tls.Config, error) {
 		Agreed: true,
 		DNS01Solver: &certmagic.DNS01Solver{
 			DNSManager: certmagic.DNSManager{
-				DNSProvider: dnsProvider,
+				DNSProvider:        dnsProvider,
+				Resolvers:          []string{"1.1.1.1:53", "8.8.8.8:53"},
+				PropagationTimeout: 5 * time.Minute,
 			},
 		},
 	})

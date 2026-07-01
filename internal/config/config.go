@@ -248,6 +248,14 @@ func (c *ServerConfig) Validate() error {
 	if c.Binary.RefreshInterval < 0 {
 		return fmt.Errorf("binaries.refresh_interval must be >= 0")
 	}
+	if c.TLS.CertMagic.Enabled {
+		if c.TLS.Email == "" {
+			return fmt.Errorf("tls.email is required when certmagic is enabled")
+		}
+		if c.TLS.CertMagic.DNSProvider == "" {
+			return fmt.Errorf("tls.certmagic.dns_provider is required when certmagic is enabled")
+		}
+	}
 	return nil
 }
 
