@@ -93,7 +93,7 @@ func TestServeChecksumNotFound(t *testing.T) {
 
 func TestNewHandlerRedirect(t *testing.T) {
 	setupTestFS(t)
-	handler := NewHandler(false, "https://cdn.example.com/bin")
+	handler := NewHandler("https://cdn.example.com/bin")
 	req := httptest.NewRequest(http.MethodGet, "/bin/lrc-linux-amd64", nil)
 	rec := httptest.NewRecorder()
 	handler(rec, req)
@@ -108,40 +108,9 @@ func TestNewHandlerRedirect(t *testing.T) {
 	}
 }
 
-func TestNewHandlerServeBinary(t *testing.T) {
-	setupTestFS(t)
-	handler := NewHandler(true, "")
-	req := httptest.NewRequest(http.MethodGet, "/bin/lrc-darwin-arm64", nil)
-	rec := httptest.NewRecorder()
-	handler(rec, req)
-
-	if rec.Code != http.StatusOK {
-		t.Fatalf("status = %d, want 200", rec.Code)
-	}
-	if rec.Body.String() != "darwin-arm64\n" {
-		t.Fatalf("body = %q", rec.Body.String())
-	}
-}
-
-func TestNewHandlerServeChecksum(t *testing.T) {
-	setupTestFS(t)
-	handler := NewHandler(true, "")
-	req := httptest.NewRequest(http.MethodGet, "/bin/lrc-darwin-arm64.sha256", nil)
-	rec := httptest.NewRecorder()
-	handler(rec, req)
-
-	if rec.Code != http.StatusOK {
-		t.Fatalf("status = %d, want 200", rec.Code)
-	}
-	body := rec.Body.String()
-	if len(body) != 64 {
-		t.Fatalf("checksum length = %d, want 64", len(body))
-	}
-}
-
 func TestNewHandlerBadName(t *testing.T) {
 	setupTestFS(t)
-	handler := NewHandler(true, "")
+	handler := NewHandler("")
 	req := httptest.NewRequest(http.MethodGet, "/bin/unknown", nil)
 	rec := httptest.NewRecorder()
 	handler(rec, req)

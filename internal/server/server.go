@@ -61,17 +61,13 @@ func NewFrontend(cfg *config.ServerConfig, store *auth.Store, chisel *chiselwrap
 	return f
 }
 
-// effectiveBinaryURL returns the URL used for client binaries. In dev mode
-// it returns an empty string so the server serves embedded binaries directly.
-// In production it returns the configured binary_url, falling back to the
-// default client release URL when none is set.
+// effectiveBinaryURL returns the URL used for client binaries.
+// It returns the configured binary_url, falling back to the default
+// client release URL when none is set.
 func (f *Frontend) effectiveBinaryURL() string {
 	cfg := f.cfg.Load()
 	if cfg == nil {
 		return config.DefaultBinaryURL
-	}
-	if cfg.Dev {
-		return ""
 	}
 	if cfg.BinaryURL != "" {
 		return cfg.BinaryURL
@@ -87,7 +83,7 @@ func (f *Frontend) Run(ctx context.Context) error {
 	mux := http.NewServeMux()
 	mux.Handle("/tunnel", f.chisel.Handler())
 	mux.Handle("/tunnel/", f.chisel.Handler())
-	mux.HandleFunc("/bin/", embedbin.NewHandler(cfg.Dev, f.effectiveBinaryURL()))
+	mux.HandleFunc("/bin/", embedbin.NewHandler(f.effectiveBinaryURL()))
 	mux.HandleFunc("/register", f.handleRegister)
 	mux.HandleFunc("/regenerate", f.handleRegenerate)
 	mux.HandleFunc("/{path...}", f.handler)

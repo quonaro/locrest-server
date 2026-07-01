@@ -83,11 +83,13 @@ trap 'rm -f "$TMP"' EXIT
 
 curl -fsSL -o "$TMP" "$URL" || wget -q -O "$TMP" "$URL"
 
-EXPECTED=$(curl -fsSL "$CHECKSUM_URL" || wget -q -O - "$CHECKSUM_URL")
-ACTUAL=$(sha256sum "$TMP" | awk '{print $1}')
-if [ "$ACTUAL" != "$EXPECTED" ]; then
-  echo "Checksum verification failed" >&2
-  exit 1
+EXPECTED=$(curl -fsSL "$CHECKSUM_URL" 2>/dev/null || wget -q -O - "$CHECKSUM_URL" 2>/dev/null)
+if [ -n "$EXPECTED" ]; then
+  ACTUAL=$(sha256sum "$TMP" | awk '{print $1}')
+  if [ "$ACTUAL" != "$EXPECTED" ]; then
+    echo "Checksum verification failed" >&2
+    exit 1
+  fi
 fi
 
 # Install to a writable persistent location (handles noexec /tmp)

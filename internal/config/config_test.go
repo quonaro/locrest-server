@@ -61,7 +61,6 @@ func TestLoadFromYAML(t *testing.T) {
   http_port: 8080
   domain: "example.com"
   ttl: 30m
-  dev: true
   permissions:
     public:
       raw_tcp: true
@@ -83,9 +82,6 @@ func TestLoadFromYAML(t *testing.T) {
 	if cfg.TTL != 30*time.Minute {
 		t.Fatalf("TTL = %v, want 30m", cfg.TTL)
 	}
-	if !cfg.Dev {
-		t.Fatal("Dev should be true")
-	}
 	if !cfg.Permissions.Public.RawTCP {
 		t.Fatal("public RawTCP should be true")
 	}
@@ -105,7 +101,7 @@ func TestLoadMissingFile(t *testing.T) {
 func TestLoadIgnoresCLIArgs(t *testing.T) {
 	oldArgs := os.Args
 	defer func() { os.Args = oldArgs }()
-	os.Args = []string{"test", "-http-port", "9090", "-domain", "cli.example.com", "-dev", "-log-level", "debug"}
+	os.Args = []string{"test", "-http-port", "9090", "-domain", "cli.example.com", "-log-level", "debug"}
 
 	dir := t.TempDir()
 	path := filepath.Join(dir, "locrest.yaml")
@@ -126,9 +122,6 @@ func TestLoadIgnoresCLIArgs(t *testing.T) {
 	}
 	if cfg.Domain != "yaml.example.com" {
 		t.Fatalf("Domain = %q, want yaml.example.com", cfg.Domain)
-	}
-	if cfg.Dev {
-		t.Fatal("Dev should be false (default, not CLI-set)")
 	}
 	if cfg.LogLevel != "info" {
 		t.Fatalf("LogLevel = %q, want info", cfg.LogLevel)

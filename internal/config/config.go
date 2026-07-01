@@ -57,7 +57,6 @@ type ServerConfig struct {
 	TTL                 time.Duration     `yaml:"ttl"`
 	TTLLimit            time.Duration     `yaml:"ttl_limit"`
 	Insecure            bool              `yaml:"insecure"`
-	Dev                 bool              `yaml:"dev"`
 	BinaryURL           string            `yaml:"binary_url"`
 	StripErrorParam     bool              `yaml:"strip_error_param"`
 	BehindProxy         bool              `yaml:"behind_proxy"`

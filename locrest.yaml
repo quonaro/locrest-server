@@ -4,7 +4,6 @@ server:
   domain: "localtest.me"
   ttl: 1h
   ttl_limit: 168h
-  dev: true
   binary_url: "https://github.com/quonaro/locrest-client/releases/latest/download"
   permissions:
     public:
