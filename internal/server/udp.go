@@ -12,6 +12,7 @@ import (
 )
 
 func (f *Frontend) startUDPListener(port int) {
+	slog.Info("startUDPListener called", "port", port)
 	defer func() {
 		if r := recover(); r != nil {
 			slog.Error("panic in startUDPListener", "port", port, "recover", r)

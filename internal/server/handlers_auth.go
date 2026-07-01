@@ -287,8 +287,10 @@ func (f *Frontend) handleVerify(w http.ResponseWriter, r *http.Request) {
 									slog.Error("panic in udp listener startup", "port", udpPort, "recover", r)
 								}
 							}()
+							slog.Info("waiting for udp pipe", "port", udpPort)
 							for j := 0; j < 50; j++ {
 								if tunnel.GetProxyPipe(udpPort, "udp") != nil {
+									slog.Info("udp pipe found", "port", udpPort)
 									f.startUDPListener(udpPort)
 									return
 								}

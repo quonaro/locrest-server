@@ -81,19 +81,24 @@ func proxyPipeKey(port int, proto string) string {
 
 // RegisterProxyPipe registers a pipe listener for a given port and protocol.
 func RegisterProxyPipe(port int, proto string, pl *pipeListener) {
+	key := proxyPipeKey(port, proto)
+	fmt.Printf("[DEBUG] RegisterProxyPipe port=%d proto=%s key=%s\n", port, proto, key)
 	proxyPipesMu.Lock()
-	proxyPipes[proxyPipeKey(port, proto)] = pl
+	proxyPipes[key] = pl
 	proxyPipesMu.Unlock()
 }
 
 // GetProxyPipe returns the injection channel for a given port and protocol, or nil if not found.
 func GetProxyPipe(port int, proto string) chan net.Conn {
+	key := proxyPipeKey(port, proto)
 	proxyPipesMu.RLock()
-	pl := proxyPipes[proxyPipeKey(port, proto)]
+	pl := proxyPipes[key]
 	proxyPipesMu.RUnlock()
 	if pl == nil {
+		fmt.Printf("[DEBUG] GetProxyPipe port=%d proto=%s key=%s NOT FOUND\n", port, proto, key)
 		return nil
 	}
+	fmt.Printf("[DEBUG] GetProxyPipe port=%d proto=%s key=%s FOUND\n", port, proto, key)
 	return pl.ch
 }
 
