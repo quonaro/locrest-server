@@ -23,7 +23,7 @@ import (
 	"locrest-server/internal/script"
 )
 
-var portPathRegex = regexp.MustCompile(`^/(\d+)$`)
+var portPathRegex = regexp.MustCompile(`^/(\d+)/?$`)
 
 // Frontend is the public HTTP/HTTPS server that dispenses scripts,
 // handles challenge-response, and reverse-proxies traffic into active tunnels.

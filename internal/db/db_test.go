@@ -181,3 +181,22 @@ func TestInvalidateExpiredUsersSkipsZeroExpire(t *testing.T) {
 		t.Fatalf("token cleared for zero-expire user")
 	}
 }
+
+func TestCreateSessionDefaultTargetHost(t *testing.T) {
+	path := "test_default_host.db"
+	defer func() { _ = os.Remove(path) }()
+
+	db, err := Open(path)
+	if err != nil {
+		t.Fatalf("open db: %v", err)
+	}
+	defer func() { _ = db.Close() }()
+
+	sess, err := db.CreateSession(8080, 30001, "", time.Hour, false, 8, "http", "public", "", "", nil, "")
+	if err != nil {
+		t.Fatalf("create session: %v", err)
+	}
+	if sess.TargetHost != "localhost" {
+		t.Fatalf("default target host = %q, want localhost", sess.TargetHost)
+	}
+}

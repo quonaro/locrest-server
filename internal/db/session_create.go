@@ -33,7 +33,7 @@ func validateSubdomain(s string) error {
 // If preferredSubdomain is non-empty it is validated and used; otherwise a random one is generated.
 func (d *DB) CreateSession(localPort, serverPort int, targetHost string, ttl time.Duration, infinity bool, subdomainLen int, mode, role, httpAuth, preferredSubdomain string, allowedIPs []string, username string) (*Session, error) {
 	if targetHost == "" {
-		targetHost = "127.0.0.1"
+		targetHost = "localhost"
 	}
 	token, err := randHex(32)
 	if err != nil {
