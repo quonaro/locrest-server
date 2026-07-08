@@ -33,10 +33,18 @@ func localPipePort(s string) int {
 }
 
 func newPipeListener() *pipeListener {
+	// LOCREST PATCH: increased from 10 to 128. Vite HMR issues many parallel
+	// module requests; a 10-slot buffer exhausts quickly and causes 503s.
 	return &pipeListener{
-		ch:     make(chan net.Conn, 10),
+		ch:     make(chan net.Conn, 128),
 		closed: make(chan struct{}),
 	}
+}
+
+// NewTestPipeListener creates a pipe listener for use in tests only.
+// LOCREST PATCH: exported so the server tests can register fake pipes.
+func NewTestPipeListener() *pipeListener {
+	return newPipeListener()
 }
 
 func (l *pipeListener) Accept() (net.Conn, error) {

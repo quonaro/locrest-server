@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"locrest-server/internal/auth"
+	tunnel "locrest-server/internal/chiselvendor/tunnel"
 	"locrest-server/internal/chiselwrapper"
 	"locrest-server/internal/config"
 	"locrest-server/internal/db"
@@ -45,8 +46,17 @@ func TestCleanupKeepsActiveSessionOnDisconnect(t *testing.T) {
 	if _, ok := store.Get(sess.SetupToken); !ok {
 		t.Fatal("active session should not be deleted by cleanup")
 	}
+	if _, _, ok := f.resolveRoute(sess.Subdomain + ".localtest.me"); ok {
+		t.Fatal("route should be deleted when pipe is missing")
+	}
+
+	// Simulate reconnect: pipe appears again and route should be restored.
+	tunnel.RegisterProxyPipe(sess.ServerPort, "tcp", tunnel.NewTestPipeListener())
+	defer tunnel.UnregisterProxyPipe(sess.ServerPort, "tcp")
+	f.cleanStaleRoutesAndSessions()
+
 	if _, _, ok := f.resolveRoute(sess.Subdomain + ".localtest.me"); !ok {
-		t.Fatal("route should not be deleted by cleanup")
+		t.Fatal("route should be re-registered when pipe returns")
 	}
 }
 

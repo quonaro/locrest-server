@@ -39,6 +39,10 @@ func (f *Frontend) cleanStaleRoutesAndSessions() {
 	var expiredSessions []string
 	var disconnectedSessions []string
 	var httpRoutesToDelete []string
+	var httpRoutesToRegister []struct {
+		subdomain string
+		port      int
+	}
 
 	cfg := f.cfg.Load()
 	now := time.Now()
@@ -57,6 +61,19 @@ func (f *Frontend) cleanStaleRoutesAndSessions() {
 				continue
 			}
 		}
+		if sess.Mode == "http" {
+			hasPipe := tunnel.GetProxyPipe(sess.ServerPort, "tcp") != nil
+			hasRoute := f.hasRoute(sess.Subdomain)
+			if !hasPipe && hasRoute {
+				httpRoutesToDelete = append(httpRoutesToDelete, sess.Subdomain)
+			}
+			if hasPipe && !hasRoute {
+				httpRoutesToRegister = append(httpRoutesToRegister, struct {
+					subdomain string
+					port      int
+				}{sess.Subdomain, sess.ServerPort})
+			}
+		}
 		if cfg.Tunnel.TTL > 0 && !sess.Infinity && now.After(sess.ExpiresAt) {
 			expiredSessions = append(expiredSessions, sess.SetupToken)
 			if sess.Mode == "http" {
@@ -68,6 +85,9 @@ func (f *Frontend) cleanStaleRoutesAndSessions() {
 	f.mu.Lock()
 	for _, sub := range httpRoutesToDelete {
 		delete(f.routes, sub)
+	}
+	for _, reg := range httpRoutesToRegister {
+		f.routes[reg.subdomain] = reg.port
 	}
 	f.mu.Unlock()
 
