@@ -87,14 +87,6 @@ func (f *Frontend) isAllowedTunnelHost(host string) bool {
 	return true
 }
 
-// hasRoute reports whether a route is registered for the given subdomain.
-func (f *Frontend) hasRoute(subdomain string) bool {
-	f.mu.RLock()
-	defer f.mu.RUnlock()
-	_, ok := f.routes[subdomain]
-	return ok
-}
-
 // resolveRoute looks up the backend port for a given host (or subdomain).
 func (f *Frontend) resolveRoute(host string) (port int, subdomain string, ok bool) {
 	if colonIdx := strings.LastIndex(host, ":"); colonIdx != -1 {

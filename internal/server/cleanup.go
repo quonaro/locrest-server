@@ -39,10 +39,6 @@ func (f *Frontend) cleanStaleRoutesAndSessions() {
 	var expiredSessions []string
 	var disconnectedSessions []string
 	var httpRoutesToDelete []string
-	var httpRoutesToRegister []struct {
-		subdomain string
-		port      int
-	}
 
 	cfg := f.cfg.Load()
 	now := time.Now()
@@ -50,30 +46,26 @@ func (f *Frontend) cleanStaleRoutesAndSessions() {
 		if !sess.IsActivated() {
 			continue
 		}
-		if sess.Mode == "tcp" || sess.Mode == "tcp/udp" {
-			tcpGone := tunnel.GetProxyPipe(sess.ServerPort, "tcp") == nil
-			udpGone := true
-			if sess.Mode == "tcp/udp" {
-				udpGone = tunnel.GetProxyPipe(sess.ServerPort, "udp") == nil
-			}
-			if tcpGone && udpGone {
-				disconnectedSessions = append(disconnectedSessions, sess.SetupToken)
-				continue
-			}
+
+		disconnected := false
+		switch sess.Mode {
+		case "tcp":
+			disconnected = tunnel.GetProxyPipe(sess.ServerPort, "tcp") == nil
+		case "tcp/udp":
+			disconnected = tunnel.GetProxyPipe(sess.ServerPort, "tcp") == nil &&
+				tunnel.GetProxyPipe(sess.ServerPort, "udp") == nil
+		case "http":
+			disconnected = tunnel.GetProxyPipe(sess.ServerPort, "tcp") == nil
 		}
-		if sess.Mode == "http" {
-			hasPipe := tunnel.GetProxyPipe(sess.ServerPort, "tcp") != nil
-			hasRoute := f.hasRoute(sess.Subdomain)
-			if !hasPipe && hasRoute {
+
+		if disconnected {
+			disconnectedSessions = append(disconnectedSessions, sess.SetupToken)
+			if sess.Mode == "http" {
 				httpRoutesToDelete = append(httpRoutesToDelete, sess.Subdomain)
 			}
-			if hasPipe && !hasRoute {
-				httpRoutesToRegister = append(httpRoutesToRegister, struct {
-					subdomain string
-					port      int
-				}{sess.Subdomain, sess.ServerPort})
-			}
+			continue
 		}
+
 		if cfg.Tunnel.TTL > 0 && !sess.Infinity && now.After(sess.ExpiresAt) {
 			expiredSessions = append(expiredSessions, sess.SetupToken)
 			if sess.Mode == "http" {
@@ -85,9 +77,6 @@ func (f *Frontend) cleanStaleRoutesAndSessions() {
 	f.mu.Lock()
 	for _, sub := range httpRoutesToDelete {
 		delete(f.routes, sub)
-	}
-	for _, reg := range httpRoutesToRegister {
-		f.routes[reg.subdomain] = reg.port
 	}
 	f.mu.Unlock()
 
