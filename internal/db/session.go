@@ -7,47 +7,49 @@ import (
 
 // sessionData is the JSON-serializable representation of a session.
 type sessionData struct {
-	PubKey     []byte    `json:"pubkey"`
-	Subdomain  string    `json:"subdomain"`
-	LocalPort  int       `json:"local_port"`
-	ServerPort int       `json:"server_port"`
-	TargetHost string    `json:"target_host"`
-	Token      string    `json:"token"`
-	SetupToken string    `json:"setup_token"`
-	CreatedAt  time.Time `json:"created_at"`
-	ExpiresAt  time.Time `json:"expires_at"`
-	Nonce      string    `json:"nonce"`
-	NonceAt    time.Time `json:"nonce_at"`
-	Activated  bool      `json:"activated"`
-	Mode       string    `json:"mode"`
-	Role       string    `json:"role"`
-	HTTPAuth   string    `json:"http_auth"`
-	AllowedIPs []string  `json:"allowed_ips"`
-	Infinity   bool      `json:"infinity"`
-	Username   string    `json:"username"`
+	PubKey      []byte    `json:"pubkey"`
+	Subdomain   string    `json:"subdomain"`
+	LocalPort   int       `json:"local_port"`
+	ServerPort  int       `json:"server_port"`
+	TargetHost  string    `json:"target_host"`
+	Token       string    `json:"token"`
+	SetupToken  string    `json:"setup_token"`
+	CreatedAt   time.Time `json:"created_at"`
+	ExpiresAt   time.Time `json:"expires_at"`
+	Nonce       string    `json:"nonce"`
+	NonceAt     time.Time `json:"nonce_at"`
+	Activated   bool      `json:"activated"`
+	ActivatedAt time.Time `json:"activated_at"`
+	Mode        string    `json:"mode"`
+	Role        string    `json:"role"`
+	HTTPAuth    string    `json:"http_auth"`
+	AllowedIPs  []string  `json:"allowed_ips"`
+	Infinity    bool      `json:"infinity"`
+	Username    string    `json:"username"`
 }
 
 // Session holds tunnel metadata and the registered client public key.
 type Session struct {
-	mu         sync.Mutex
-	PubKey     []byte
-	Subdomain  string
-	LocalPort  int
-	ServerPort int
-	TargetHost string
-	Token      string
-	SetupToken string
-	CreatedAt  time.Time
-	ExpiresAt  time.Time
-	Nonce      string
-	NonceAt    time.Time
-	Activated  bool
-	Mode       string
-	Role       string
-	HTTPAuth   string
-	AllowedIPs []string
-	Infinity   bool
-	Username   string
+	mu          sync.Mutex
+	PubKey      []byte
+	Subdomain   string
+	LocalPort   int
+	ServerPort  int
+	TargetHost  string
+	Token       string
+	SetupToken  string
+	CreatedAt   time.Time
+	ExpiresAt   time.Time
+	Nonce       string
+	NonceAt     time.Time
+	Activated   bool
+	ActivatedAt time.Time
+	Mode        string
+	Role        string
+	HTTPAuth    string
+	AllowedIPs  []string
+	Infinity    bool
+	Username    string
 }
 
 func (s *Session) toData() *sessionData {
@@ -56,8 +58,9 @@ func (s *Session) toData() *sessionData {
 		ServerPort: s.ServerPort, TargetHost: s.TargetHost, Token: s.Token,
 		SetupToken: s.SetupToken, CreatedAt: s.CreatedAt, ExpiresAt: s.ExpiresAt,
 		Nonce: s.Nonce, NonceAt: s.NonceAt, Activated: s.Activated,
-		Mode: s.Mode, Role: s.Role, HTTPAuth: s.HTTPAuth, AllowedIPs: s.AllowedIPs,
-		Infinity: s.Infinity, Username: s.Username,
+		ActivatedAt: s.ActivatedAt, Mode: s.Mode, Role: s.Role,
+		HTTPAuth: s.HTTPAuth, AllowedIPs: s.AllowedIPs, Infinity: s.Infinity,
+		Username: s.Username,
 	}
 }
 
@@ -74,6 +77,7 @@ func (s *Session) fromData(d *sessionData) {
 	s.Nonce = d.Nonce
 	s.NonceAt = d.NonceAt
 	s.Activated = d.Activated
+	s.ActivatedAt = d.ActivatedAt
 	s.Mode = d.Mode
 	s.Role = d.Role
 	s.HTTPAuth = d.HTTPAuth
@@ -106,6 +110,7 @@ func (sess *Session) ConsumeNonce(nonce string, ttl time.Duration) bool {
 func (sess *Session) Activate() {
 	sess.mu.Lock()
 	sess.Activated = true
+	sess.ActivatedAt = time.Now()
 	sess.mu.Unlock()
 }
 

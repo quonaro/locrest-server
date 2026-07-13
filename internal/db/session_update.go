@@ -115,6 +115,7 @@ func (d *DB) ActivateSession(setupToken string) error {
 			return err
 		}
 		sd.Activated = true
+		sd.ActivatedAt = time.Now()
 		sd.Nonce = ""
 		newData, err := json.Marshal(&sd)
 		if err != nil {

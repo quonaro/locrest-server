@@ -33,6 +33,7 @@ func newTestFrontend(t *testing.T, cfg *config.ServerConfig) *Frontend {
 		cfg.Runtime.RootPage = true
 		cfg.Runtime.StatusEndpoint = true
 		cfg.Binary.RefreshInterval = 0
+		cfg.Tunnel.ActivationGracePeriod = 0
 	}
 	dir := t.TempDir()
 	database, err := db.Open(filepath.Join(dir, "test.db"))

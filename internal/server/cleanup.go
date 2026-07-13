@@ -46,6 +46,9 @@ func (f *Frontend) cleanStaleRoutesAndSessions() {
 		if !sess.IsActivated() {
 			continue
 		}
+		if cfg.Tunnel.ActivationGracePeriod > 0 && !sess.ActivatedAt.IsZero() && now.Sub(sess.ActivatedAt) < cfg.Tunnel.ActivationGracePeriod {
+			continue
+		}
 
 		disconnected := false
 		switch sess.Mode {

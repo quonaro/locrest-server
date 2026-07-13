@@ -73,14 +73,15 @@ type NetworkConfig struct {
 
 // TunnelConfig holds tunnel parameters.
 type TunnelConfig struct {
-	TTL                time.Duration `yaml:"ttl"`
-	TTLLimit           time.Duration `yaml:"ttl_limit"`
-	MaxSessions        int           `yaml:"max_sessions"`
-	SubdomainLength    int           `yaml:"subdomain_length"`
-	ReservedSubdomains []string      `yaml:"reserved_subdomains"`
-	AllowedTunnelHosts []string      `yaml:"allowed_tunnel_hosts"`
-	BlockedTunnelHosts []string      `yaml:"blocked_tunnel_hosts"`
-	StripErrorParam    bool          `yaml:"strip_error_param"`
+	TTL                   time.Duration `yaml:"ttl"`
+	TTLLimit              time.Duration `yaml:"ttl_limit"`
+	MaxSessions           int           `yaml:"max_sessions"`
+	SubdomainLength       int           `yaml:"subdomain_length"`
+	ReservedSubdomains    []string      `yaml:"reserved_subdomains"`
+	AllowedTunnelHosts    []string      `yaml:"allowed_tunnel_hosts"`
+	BlockedTunnelHosts    []string      `yaml:"blocked_tunnel_hosts"`
+	StripErrorParam       bool          `yaml:"strip_error_param"`
+	ActivationGracePeriod time.Duration `yaml:"activation_grace_period"`
 }
 
 // SecurityConfig holds security and rate limiting.
@@ -132,11 +133,12 @@ func DefaultConfig() *ServerConfig {
 			HTTPSPort: 443,
 		},
 		Tunnel: TunnelConfig{
-			TTL:                1 * time.Hour,
-			TTLLimit:           7 * 24 * time.Hour,
-			MaxSessions:        10000,
-			AllowedTunnelHosts: []string{"localhost", "127.0.0.1"},
-			SubdomainLength:    16,
+			TTL:                   1 * time.Hour,
+			TTLLimit:              7 * 24 * time.Hour,
+			MaxSessions:           10000,
+			AllowedTunnelHosts:    []string{"localhost", "127.0.0.1"},
+			SubdomainLength:       16,
+			ActivationGracePeriod: 10 * time.Second,
 		},
 		Security: SecurityConfig{
 			RateLimit:           RateLimit{Requests: 10, Window: time.Minute},

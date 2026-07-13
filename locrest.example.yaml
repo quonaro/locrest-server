@@ -54,6 +54,9 @@ server:
     blocked_tunnel_hosts: []
     # Strip ?error=... from proxied request URLs.
     strip_error_param: false
+    # Grace period after activation during which a session is never
+    # considered disconnected, giving the chisel pipe time to establish.
+    activation_grace_period: 10s
 
   # ------------------------------------------------------------------
   # Security
