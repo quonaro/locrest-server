@@ -248,6 +248,16 @@ install_files() {
 	touch "$LOG_DIR/lrs.log"
 	chown "$USER_NAME":"$GROUP_NAME" "$LOG_DIR/lrs.log"
 	chmod 640 "$LOG_DIR/lrs.log"
+
+	if command -v setcap >/dev/null 2>&1; then
+		if setcap cap_net_bind_service=+ep "$INSTALL_DIR/$BIN_NAME" 2>/dev/null; then
+			info "granted cap_net_bind_service to $BIN_NAME"
+		else
+			warn "could not grant cap_net_bind_service; low ports may require root or a reverse proxy"
+		fi
+	else
+		warn "setcap not found; low ports may require root or a reverse proxy"
+	fi
 }
 
 setup_config() {
