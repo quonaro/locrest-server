@@ -245,6 +245,9 @@ install_files() {
 	chmod 755 "$LOG_DIR"
 	chown root:"$GROUP_NAME" "$CONFIG_DIR"
 	chown "$USER_NAME":"$GROUP_NAME" "$DATA_DIR" "$LOG_DIR"
+	touch "$LOG_DIR/lrs.log"
+	chown "$USER_NAME":"$GROUP_NAME" "$LOG_DIR/lrs.log"
+	chmod 640 "$LOG_DIR/lrs.log"
 }
 
 setup_config() {
@@ -308,6 +311,7 @@ install_sysv() {
 DAEMON=__INSTALL_DIR__/lrs
 PIDFILE=/var/run/lrs.pid
 export LOCREST_CONFIG=__CONFIG_FILE__
+export LOCREST_LOG_DIR=__LOG_DIR__
 export LOCREST_ADMIN_SOCKET=__DATA_DIR__/locrest-admin.sock
 start(){ cd __DATA_DIR__ || exit 1; if command -v start-stop-daemon >/dev/null 2>&1; then start-stop-daemon --start --quiet --make-pidfile --pidfile $PIDFILE --background --exec $DAEMON -- run; else nohup $DAEMON run >__LOG_DIR__/lrs.log 2>&1 & echo $! > $PIDFILE; fi; }
 stop(){ [ -f $PIDFILE ] && kill $(cat $PIDFILE) 2>/dev/null || true; rm -f $PIDFILE; }
@@ -322,16 +326,23 @@ install_openrc() {
 	info "installing OpenRC service"
 	cat > "/etc/init.d/$SERVICE_NAME" <<'RC'
 #!/sbin/openrc-run
+depend() {
+	need net
+	after firewall
+}
 command="__INSTALL_DIR__/lrs"
 command_args="run"
 command_user="__USER__:__GROUP__"
 command_background=true
 pidfile="/var/run/lrs.pid"
+output_log="__LOG_DIR__/lrs.log"
+error_log="__LOG_DIR__/lrs.log"
 export LOCREST_CONFIG="__CONFIG_FILE__"
+export LOCREST_LOG_DIR="__LOG_DIR__"
 export LOCREST_ADMIN_SOCKET="__DATA_DIR__/locrest-admin.sock"
 directory="__DATA_DIR__"
 RC
-	sed -i.bak -e "s|__USER__|$USER_NAME|g" -e "s|__GROUP__|$GROUP_NAME|g" -e "s|__DATA_DIR__|$DATA_DIR|g" -e "s|__CONFIG_FILE__|$CONFIG_FILE|g" -e "s|__INSTALL_DIR__|$INSTALL_DIR|g" "/etc/init.d/$SERVICE_NAME"
+	sed -i.bak -e "s|__USER__|$USER_NAME|g" -e "s|__GROUP__|$GROUP_NAME|g" -e "s|__DATA_DIR__|$DATA_DIR|g" -e "s|__CONFIG_FILE__|$CONFIG_FILE|g" -e "s|__INSTALL_DIR__|$INSTALL_DIR|g" -e "s|__LOG_DIR__|$LOG_DIR|g" "/etc/init.d/$SERVICE_NAME"
 	rm -f "/etc/init.d/$SERVICE_NAME.bak"
 	chmod 755 "/etc/init.d/$SERVICE_NAME"
 }
@@ -411,6 +422,40 @@ banner() {
 	printf "  %s (%s)  %s  %s\n\n" "$ver" "$commit" "$plat" "$init"
 }
 
+print_next_steps() {
+	info "service commands"
+	case "$INIT_SYSTEM" in
+		systemd)
+			echo "  status: systemctl status $SERVICE_NAME"
+			echo "  logs:   journalctl -xeu $SERVICE_NAME -f"
+			echo "  edit:   $CONFIG_FILE (set at least the domain)"
+			;;
+		openrc)
+			echo "  status: rc-service $SERVICE_NAME status"
+			echo "  logs:   tail -f $LOG_DIR/lrs.log"
+			echo "  edit:   $CONFIG_FILE (set at least the domain)"
+			;;
+		sysv)
+			echo "  status: service $SERVICE_NAME status"
+			echo "  logs:   tail -f $LOG_DIR/lrs.log"
+			echo "  edit:   $CONFIG_FILE (set at least the domain)"
+			;;
+		freebsd)
+			echo "  status: service ${SERVICE_NAME}_ status"
+			echo "  logs:   tail -f $LOG_DIR/lrs.log"
+			echo "  edit:   $CONFIG_FILE (set at least the domain)"
+			;;
+		launchd)
+			echo "  status: launchctl list | grep $SERVICE_NAME"
+			echo "  logs:   tail -f $LOG_DIR/lrs.log"
+			echo "  edit:   $CONFIG_FILE (set at least the domain)"
+			;;
+		*)
+			echo "  edit:   $CONFIG_FILE (set at least the domain)"
+			;;
+	esac
+}
+
 main() {
 	detect_platform
 	detect_init
@@ -439,7 +484,7 @@ main() {
 	echo "  binary: $INSTALL_DIR/$BIN_NAME"
 	echo "  config: $CONFIG_FILE"
 	echo "  init:   $INIT_SYSTEM"
-	echo "edit $CONFIG_FILE (at least the domain) before exposing the server"
+	print_next_steps
 }
 
 main "$@"
