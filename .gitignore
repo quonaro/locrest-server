@@ -46,6 +46,9 @@ coverage.html
 *.key
 *.pem
 
+# Private deployment scripts and sensitive local files
+/private/
+
 # Local config overrides
 locrest.local.yaml
 

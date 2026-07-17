@@ -1,0 +1,115 @@
+name: Publish public files
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - "public/**"
+
+permissions:
+  contents: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Stage public files
+        run: |
+          mkdir -p /tmp/locrest-public
+          cp -r public/. /tmp/locrest-public/
+
+          # Disable Jekyll processing so files without extensions are served as-is.
+          touch /tmp/locrest-public/.nojekyll
+
+          # Plain 404 to avoid inherited SPA 404 redirects on GitHub Pages.
+          cat > /tmp/locrest-public/404.html <<'EOF'
+          <!DOCTYPE html>
+          <html lang="en">
+          <head>
+            <meta charset="utf-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1">
+            <title>404 - Not Found</title>
+          </head>
+          <body>
+            <h1>404 - Not Found</h1>
+            <p>The requested file does not exist.</p>
+            <p><a href="/locrest-server/">Back to Locrest public files</a></p>
+          </body>
+          </html>
+          EOF
+
+      - name: Generate file index
+        run: |
+          python3 - <<'PY'
+          from datetime import datetime, timezone
+          from pathlib import Path
+          from textwrap import dedent
+
+          base = Path('/tmp/locrest-public')
+          exclude = {'.nojekyll', 'index.html', '404.html'}
+
+          rows = []
+          for path in sorted(base.rglob('*')):
+              if path.is_file() and path.name not in exclude:
+                  rel = path.relative_to(base).as_posix()
+                  size_bytes = path.stat().st_size
+                  size = f'{size_bytes / 1024:.2f} KB' if size_bytes >= 1024 else f'{size_bytes} B'
+                  rows.append(f'<tr><td><a href="{rel}">{rel}</a></td><td>{size}</td></tr>')
+
+          html = dedent(f'''
+          <!DOCTYPE html>
+          <html lang="en">
+          <head>
+            <meta charset="utf-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1">
+            <title>Locrest Public Files</title>
+            <style>
+              body {{ font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #111; color: #eee; margin: 0; padding: 2rem; }}
+              .container {{ max-width: 900px; margin: 0 auto; }}
+              h1 {{ margin-bottom: 0.25rem; }}
+              .hint {{ color: #888; margin-bottom: 2rem; }}
+              code {{ background: #222; padding: 0.15rem 0.4rem; border-radius: 4px; font-family: ui-monospace, SFMono-Regular, monospace; }}
+              table {{ width: 100%; border-collapse: collapse; margin-top: 1rem; }}
+              th, td {{ text-align: left; padding: 0.75rem 1rem; border-bottom: 1px solid #333; }}
+              th {{ color: #aaa; font-weight: 600; }}
+              a {{ color: #4ea8ff; text-decoration: none; }}
+              a:hover {{ text-decoration: underline; }}
+              footer {{ margin-top: 3rem; color: #666; font-size: 0.875rem; }}
+            </style>
+          </head>
+          <body>
+            <div class="container">
+              <h1>Locrest Public Files</h1>
+              <p class="hint">Generated {datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")}</p>
+
+              <table>
+                <thead>
+                  <tr><th>Name</th><th>Size</th></tr>
+                </thead>
+                <tbody>
+                  {''.join(rows) if rows else '<tr><td colspan="2">No files</td></tr>'}
+                </tbody>
+              </table>
+
+              <footer>Repository quonaro/locrest-server</footer>
+            </div>
+          </body>
+          </html>
+          ''')
+
+          with open('/tmp/locrest-public/index.html', 'w', encoding='utf-8') as f:
+              f.write(html.lstrip())
+          PY
+
+      - name: Deploy to public branch
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_branch: public
+          publish_dir: /tmp/locrest-public
+          force_orphan: true

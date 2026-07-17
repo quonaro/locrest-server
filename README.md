@@ -6,7 +6,7 @@
 ## Quick install
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/quonaro/locrest-server/main/install.sh | sudo bash
+curl -fsSL https://raw.githubusercontent.com/quonaro/locrest-server/public/install.sh | sudo bash
 ```
 
 The installer detects your OS, architecture, and init system (systemd, SysV init,
